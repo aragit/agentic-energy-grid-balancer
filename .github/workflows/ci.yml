@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - run: pytest --cov=core --cov=api --cov-report=xml
+      - uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install flake8 black
+      - run: black --check .
+      - run: flake8 core/ api/ tests/ --max-line-length=120
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t agentic-energy-grid-balancer .
+      - run: |
+          docker run -d -p 8000:8000 --name test-api agentic-energy-grid-balancer
+          sleep 5
+          curl -f http://localhost:8000/health || exit 1
+          docker stop test-api
