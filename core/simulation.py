@@ -18,7 +18,6 @@ from core.agents.regulatory import RegulatoryAgent
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class SimulationResult:
     simulation_id: int
@@ -31,7 +30,6 @@ class SimulationResult:
     price_history: List[float]
     violations: List[Dict]
     status: str
-
 
 class GridSimulation:
     def __init__(self, llm, db_session=None, steps: int = 24):
@@ -150,9 +148,9 @@ class GridSimulation:
                     )
                 )
 
-        # Battery: AGENTIC — uses LLM reasoning for arbitrage strategy
+        # Battery: AGENTIC — uses LLM reasoning for arbitrage strategy, validated by symbolic guardrails
         if self.battery:
-            battery_strategy = self.battery.decide_bid(
+            validated = self.battery.get_validated_bid(
                 market_price=current_price,
                 demand=demand,
                 frequency=self.physics.frequency,
@@ -160,42 +158,14 @@ class GridSimulation:
                 weather=weather.__dict__,
             )
 
-            bid_price = float(battery_strategy.get("bid_price", current_price))
-            output_adj = battery_strategy.get("output_adjustment", "hold")
-
-            # MOCKLLM GUARDRAIL: Override broken parser with physically correct logic
+            bid_price = validated["bid_price"]
+            output_adj = validated["output_adjustment"]
             charge_ratio = self.battery.charge_level / self.battery.capacity_mwh
 
-            if bid_price <= 0.01 or bid_price > 200:
-                bid_price = current_price
-
-            # Normalize action: MockLLM returns "sell"/"maintain"/etc
-            if output_adj in ("sell", "discharge"):
-                output_adj = "discharge"
-            elif output_adj in ("buy", "charge", "ramp_up"):
-                output_adj = "charge"
-            elif output_adj in ("maintain", "hold", "reduce_demand"):
-                output_adj = "hold"
-
-            # PHYSICAL ARBITRAGE LOGIC: Buy low, sell high, with safety bounds
-            if charge_ratio > 0.85:
-                output_adj = "discharge"
-                bid_price = max(bid_price, current_price + 2)
-            elif charge_ratio < 0.15:
-                output_adj = "charge"
-                bid_price = min(bid_price, current_price - 2)
-            elif current_price < 40 and charge_ratio < 0.8:
-                output_adj = "charge"
-                bid_price = current_price - 2
-            elif current_price > 55 and charge_ratio > 0.2:
-                output_adj = "discharge"
-                bid_price = current_price + 2
-            else:
-                output_adj = "hold"
-
             logger.info(
-                f"[BATTERY] step={step}, llm_price={float(battery_strategy.get('bid_price', 0)):.2f}, "
-                f"final_action={output_adj}, final_price={bid_price:.2f}, "
+                f"[BATTERY] step={step}, llm_price={validated['llm_bid_price']:.2f}, "
+                f"llm_action={validated['llm_action']}, final_action={output_adj}, final_price={bid_price:.2f}, "
+                f"guardrail={'YES' if validated['guardrail_triggered'] else 'NO'}, "
                 f"charge={self.battery.charge_level:.1f}/{self.battery.capacity_mwh} ({charge_ratio*100:.0f}%)"
             )
 

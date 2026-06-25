@@ -1,9 +1,13 @@
 """Battery storage agent with arbitrage strategy."""
 
 import json
+import logging
 from typing import Dict, Any
 from core.agents.base import BaseAgent
 from core.memory import Experience
+from core.schemas import BidStrategy, ValidatedBid
+
+logger = logging.getLogger(__name__)
 
 
 class BatteryAgent(BaseAgent):
@@ -114,7 +118,7 @@ class BatteryAgent(BaseAgent):
             elif recent_prices[-1] < recent_prices[-2] * 0.95:
                 price_trend = "falling"
 
-        # FIX: No $ symbols before numbers — MockLLM parser fails on $
+        # FIX: No $ symbols before numbers — ReasoningEngine parser fails on $
         return f"""You are an autonomous battery arbitrage agent with memory and learning.
 
 Agent: {self.name}
@@ -143,12 +147,108 @@ ARBITRAGE STRATEGY:
 - HOLD when prices are uncertain or you are near empty/full
 - Consider price trends: if prices are rising, hold; if falling, sell now
 
-Respond with JSON:
+Respond with VALID JSON matching this exact schema:
 {{
-    "bid_price": float,
-    "output_adjustment": "charge" | "discharge" | "hold",
-    "carbon_trade": float,
-    "reasoning": "string explaining your arbitrage decision based on price trend and charge level",
-    "confidence": 0.0-1.0
+    "bid_price": float,        // USD per MWh, must be between 1.0 and 200.0
+    "output_adjustment": string,  // One of: "charge", "discharge", "hold", "sell", "buy", "maintain", "ramp_up", "ramp_down", "reduce_demand"
+    "carbon_trade": float,     // kg CO2, optional (default 0)
+    "reasoning": string,       // Explain your arbitrage decision
+    "confidence": float        // 0.0 to 1.0
 }}
 """
+
+    def get_validated_bid(
+        self,
+        market_price: float,
+        demand: float,
+        frequency: float,
+        carbon_price: float,
+        weather: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
+        """Get LLM strategy and apply physical guardrails (clamp, don't replace).
+
+        Type 2 (Symbolic[Neuro]) principle: The neural subroutine proposes;
+        the symbolic layer validates and only overrides when physically
+        impossible or safety-critical.
+        """
+        # Step 1: Invoke neural subroutine (LLM) — returns already Pydantic-validated dict
+        raw_decision = self.decide_bid(
+            market_price=market_price,
+            demand=demand,
+            frequency=frequency,
+            carbon_price=carbon_price,
+            weather=weather,
+        )
+
+        # Step 2: Extract LLM's proposed values (already validated by BidSchema)
+        llm_price = raw_decision["bid_price"]
+        llm_action_raw = raw_decision["output_adjustment"]
+        confidence = raw_decision.get("confidence", 0.5)
+        reasoning = raw_decision.get("reasoning", "")
+        validation_errors = raw_decision.get("validation_errors", [])
+
+        # Normalize action vocabulary to battery-specific canonical forms
+        if llm_action_raw in ("sell", "discharge"):
+            llm_action = "discharge"
+        elif llm_action_raw in ("buy", "charge", "ramp_up"):
+            llm_action = "charge"
+        elif llm_action_raw in ("maintain", "hold", "reduce_demand"):
+            llm_action = "hold"
+        else:
+            llm_action = "hold"
+
+        # Step 3: GUARDRAIL — Physical/safety override only when necessary
+        charge_ratio = self.charge_level / self.capacity_mwh
+        final_action = llm_action
+        final_price = llm_price
+        guardrail_triggered = False
+
+        # CRITICAL: Force charge if critically empty (< 5%)
+        if charge_ratio < 0.05:
+            final_action = "charge"
+            final_price = min(llm_price, market_price - 2)
+            guardrail_triggered = True
+            logger.warning(
+                f"[BATTERY GUARDRAIL] SoC critically low ({charge_ratio:.1%}) — "
+                f"LLM wanted {llm_action}, forced charge"
+            )
+
+        # CRITICAL: Force discharge if critically full (> 95%)
+        elif charge_ratio > 0.95:
+            final_action = "discharge"
+            final_price = max(llm_price, market_price + 2)
+            guardrail_triggered = True
+            logger.warning(
+                f"[BATTERY GUARDRAIL] SoC critically high ({charge_ratio:.1%}) — "
+                f"LLM wanted {llm_action}, forced discharge"
+            )
+
+        # WARNING: Override discharge if nearly empty (< 15%)
+        elif llm_action == "discharge" and charge_ratio < 0.15:
+            final_action = "hold"
+            guardrail_triggered = True
+            logger.warning(
+                f"[BATTERY GUARDRAIL] LLM wanted discharge at {charge_ratio:.1%} SoC — "
+                f"overridden to hold (safety)"
+            )
+
+        # WARNING: Override charge if nearly full (> 85%)
+        elif llm_action == "charge" and charge_ratio > 0.85:
+            final_action = "hold"
+            guardrail_triggered = True
+            logger.warning(
+                f"[BATTERY GUARDRAIL] LLM wanted charge at {charge_ratio:.1%} SoC — "
+                f"overridden to hold (safety)"
+            )
+
+        return {
+            "bid_price": round(final_price, 2),
+            "output_adjustment": final_action,
+            "llm_bid_price": round(llm_price, 2),
+            "llm_action": llm_action,
+            "reasoning": reasoning,
+            "confidence": confidence,
+            "guardrail_triggered": guardrail_triggered,
+            "validation_errors": validation_errors,
+            "is_fallback": raw_decision.get("is_fallback", False),
+        }

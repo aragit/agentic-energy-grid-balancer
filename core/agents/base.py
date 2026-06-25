@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from core.llm_engine import BaseLLMEngine, LLMResponse
 from core.memory import AgentMemory, Experience
+from core.schemas import BidStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,12 @@ class BaseAgent(ABC):
         carbon_price: float,
         weather: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
+        """Invoke neural subroutine and validate output via Pydantic schema.
+
+        Type 2 (Symbolic[Neuro]): The LLM produces stochastic tokens;
+        BidStrategy.model_validate_json() compresses them into a structured,
+        bounded, typed object before any symbolic computation touches the data.
+        """
         memory_context = self.memory.get_context(current_step=0)
         strategy_advice = self.memory.get_strategy_advice()
 
@@ -73,27 +80,56 @@ class BaseAgent(ABC):
         )
         messages = [{"role": "system", "content": prompt}]
 
+        validated_strategy = None
+        parse_errors = []
+
         try:
             response: LLMResponse = self.llm.chat_completion(
                 messages=messages, temperature=0.7, max_tokens=256
             )
-            strategy = json.loads(response.content)
-        except (json.JSONDecodeError, Exception) as e:
-            logger.warning(f"[{self.name}] LLM parse failed: {e}. Using fallback.")
-            strategy = self._fallback_strategy(market_price)
+            # TYPE 2 BOUNDARY: Pydantic validation compresses stochastic tokens → exact params
+            validated_strategy = BidStrategy.model_validate_json(response.content)
+            logger.info(
+                f"[{self.name}] LLM output validated: price={validated_strategy.bid_price}, "
+                f"action={validated_strategy.output_adjustment}, confidence={validated_strategy.confidence}"
+            )
 
-        bid_price = float(strategy.get("bid_price", market_price))
-        bid_price = max(bid_price, 1.0)
+        except json.JSONDecodeError as e:
+            parse_errors.append(f"JSON decode failed: {e}")
+            logger.warning(f"[{self.name}] LLM returned invalid JSON: {e}")
+        except Exception as e:
+            # Pydantic ValidationError or any other exception
+            parse_errors.append(f"Validation failed: {e}")
+            logger.warning(f"[{self.name}] LLM output failed Pydantic validation: {e}")
 
+        # If validation failed, use fallback but RECORD the failure
+        if validated_strategy is None:
+            fallback = self._fallback_strategy(market_price)
+            # Convert fallback dict to BidStrategy for uniform interface
+            try:
+                validated_strategy = BidStrategy.model_validate(fallback)
+                logger.info(f"[{self.name}] Using fallback strategy due to validation failure")
+            except Exception:
+                # Ultimate fallback: hardcoded safe values
+                validated_strategy = BidStrategy(
+                    bid_price=market_price,
+                    output_adjustment="hold",
+                    confidence=0.5,
+                    reasoning="Ultimate fallback: validation and fallback both failed",
+                )
+
+        # Build decision dict with full audit trail
         decision = {
             "agent_name": self.name,
             "agent_type": self.agent_type,
-            "bid_price": round(bid_price, 2),
-            "output_adjustment": strategy.get("output_adjustment", "maintain"),
-            "carbon_trade": round(float(strategy.get("carbon_trade", 0.0)), 2),
-            "reasoning": strategy.get("reasoning", "Fallback strategy"),
-            "confidence": float(strategy.get("confidence", 0.5)),
-            "latency_ms": getattr(response, "latency_ms", 0),
+            "bid_price": round(validated_strategy.bid_price, 2),
+            "output_adjustment": validated_strategy.output_adjustment,
+            "carbon_trade": round(validated_strategy.carbon_trade, 2),
+            "reasoning": validated_strategy.reasoning,
+            "confidence": round(validated_strategy.confidence, 2),
+            "latency_ms": getattr(response, "latency_ms", 0) if 'response' in dir() else 0,
+            "validation_errors": parse_errors if parse_errors else None,
+            "is_fallback": len(parse_errors) > 0,
         }
 
         self.state.strategy_history.append(decision)
@@ -131,23 +167,22 @@ Current Market Context:
 Strategic Advice:
 {strategy_advice}
 
-Respond with JSON:
+Respond with VALID JSON matching this exact schema:
 {{
-    "bid_price": float,
-    "output_adjustment": "sell" | "ramp_down" | "ramp_up"
-    | "maintain" | "charge" | "discharge" | "reduce_demand" | "hold",
-    "carbon_trade": float,
-    "reasoning": "string",
-    "confidence": 0.0-1.0
+    "bid_price": float,        // USD per MWh, must be between 1.0 and 200.0
+    "output_adjustment": string,  // One of: "charge", "discharge", "hold", "sell", "buy", "maintain", "ramp_up", "ramp_down", "reduce_demand"
+    "carbon_trade": float,     // kg CO2, optional (default 0)
+    "reasoning": string,       // Explain your decision in 1-2 sentences
+    "confidence": float        // 0.0 to 1.0
 }}
 """
 
     def _fallback_strategy(self, market_price: float) -> Dict[str, Any]:
         return {
-            "bid_price": round(market_price * 0.95, 2),
-            "output_adjustment": "maintain",
+            "bid_price": round(max(1.0, min(200.0, market_price * 0.95)), 2),
+            "output_adjustment": "hold",
             "carbon_trade": 0.0,
-            "reasoning": "Fallback: conservative bid at 95% of market price",
+            "reasoning": "Fallback: conservative hold due to LLM parse/validation failure",
             "confidence": 0.5,
         }
 
