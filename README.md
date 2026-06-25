@@ -239,9 +239,9 @@ For each hour step:
 ### Docker (Recommended)
 
 ```bash
-git clone https://github.com/your-org/agentic-energy-grid-balancer.git
+git clone https://github.com/aragit/agentic-energy-grid-balancer.git
 cd agentic-energy-grid-balancer
-docker-compose up --build
+docker compose up --build
 ```
 
 Open [http://localhost:8001](http://localhost:8001) for the API dashboard.
@@ -336,7 +336,7 @@ docker: docker build → run → curl health + simulation + 3 data endpoints
 | **API** | FastAPI + Pydantic v2 |
 | **ORM** | SQLAlchemy 2.0 |
 | **Dashboard** | Static HTML served via FastAPI + interactive charts |
-| **Container** | Docker + docker-compose |
+| **Container** | Docker + docker compose |
 | **Testing** | pytest + pytest-cov |
 | **CI** | GitHub Actions (3-job matrix: test, lint, docker) |
 
