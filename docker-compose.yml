@@ -6,12 +6,17 @@ services:
     environment:
       - LLM_BACKEND=mock
       - PYTHONUNBUFFERED=1
-      - DATABASE_URL=sqlite:///app/data/grid.db
     volumes:
-      - ./data:/app/data
+      # Persist the SQLite database across container restarts
+      - ./energy_grid.db:/app/energy_grid.db
     restart: unless-stopped
 
+  # Optional: real LLM inference via Ollama
+  # Start with:  docker compose --profile llm up --build
+  # Then set:    LLM_BACKEND=ollama (or omit for mock)
   ollama:
+    profiles:
+      - llm
     image: ollama/ollama:latest
     volumes:
       - ollama_data:/root/.ollama
