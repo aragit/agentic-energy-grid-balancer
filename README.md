@@ -21,6 +21,85 @@ strategies — bounded by Pydantic validation and physical guardrails.
 
 **Architecture: Type 2 (Symbolic[Neuro]) per Kautz taxonomy (2020).**
 
+```mermaid
+flowchart TB
+  subgraph User["User / Client"]
+    REST["REST / curl / Swagger"]
+  end
+
+  subgraph API["API Layer (FastAPI)"]
+    EP["/simulation/run, /health, /market/*"]
+  end
+
+  subgraph SYM["Symbolic Outer Loop (Primary Controller)"]
+    SIM["GridSimulation.run()"]
+    ORCH["GridOrchestratorAgent\nvalidate_bids()"]
+    ACN["DoubleSidedAuction\nmidpoint pricing"]
+    PHYS["GridPhysics\nweather + frequency"]
+    REG["RegulatoryAgent\ncarbon + freq checks"]
+  end
+
+  subgraph NEURAL["Neural Subroutine (Bounded Component)"]
+    LLMF["LLMEngineFactory"]
+    RE["ReasoningEngine\n(rule-based, instant)"]
+    OLLAMA["Ollama\n(tinyllama / qwen2.5)"]
+    BID["BidStrategy\nPydantic model_validate_json()"]
+    GATE["BatteryGuardrails\n<5% force charge\n>95% force discharge"]
+  end
+
+  subgraph AGENTS["Symbolic Deterministic Agents"]
+    SA["SolarFarm\nmarginal cost + $5"]
+    WA["WindFarm\nmarginal cost + $5"]
+    CA["CoalPlant\nmarginal cost ($20+$25/ton) + $5"]
+    NA["NuclearPlant\nmarginal cost $5 + $5"]
+    CO["MetroCity\npiecewise WTP $45-$85"]
+  end
+
+  subgraph DATA["Data / Storage"]
+    DB["SQLAlchemy models\n(defined, not written at runtime)"]
+    MEM["AgentMemory\nepisodic in-memory"]
+    RESULTS["SimulationResult\nJSON response"]
+  end
+
+  REST -->|"POST /simulation/run"| EP
+  EP -->|"create + call"| SIM
+
+  SIM -->|"step loop"| ORCH
+  SIM -->|"validate"| ACN
+  SIM -->|"compute"| PHYS
+  SIM -->|"check"| REG
+
+  SA -->|"bid"| ORCH
+  WA -->|"bid"| ORCH
+  CA -->|"bid"| ORCH
+  NA -->|"bid"| ORCH
+  CO -->|"bid"| ORCH
+
+  SIM -->|"decide_bid()"| LLMF
+  LLMF -->|"mock"| RE
+  LLMF -->|"ollama"| OLLAMA
+  RE -->|"JSON string"| BID
+  OLLAMA -->|"JSON string"| BID
+  BID -->|"validated"| GATE
+  GATE -->|"bid"| ORCH
+
+  ORCH -->|"valid bids"| ACN
+  ACN -->|"trades + price"| REG
+  REG -->|"violations + carbon"| RESULTS
+  PHYS -->|"weather + frequency"| SIM
+
+  DB -.->|"not used"| SIM
+  MEM -->|"context"| LLMF
+
+  style SYM fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+  style NEURAL fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+  style AGENTS fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px
+  style GATE fill:#fff3e0,stroke:#e65100,stroke-width:2px
+  style BID fill:#fce4ec,stroke:#c62828,stroke-width:2px
+```
+
+**How the neural subroutine integrates:**
+
 ---
 
 ## Type 2 Architecture — Why This Qualifies
