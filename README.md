@@ -292,7 +292,7 @@ cd agentic-energy-grid-balancer
 docker compose up --build
 ```
 
-Open [http://localhost:8001](http://localhost:8001) for the API dashboard.
+Open [http://localhost:8001/docs](http://localhost:8001/docs) for the API documentation.
 
 ### Local Development
 
@@ -354,12 +354,6 @@ curl http://localhost:11434/api/tags
 
 #### Run a Simulation with Ollama
 
-**From the dashboard** (http://localhost:8001/static/index.html):
-1. Select **Ollama** from the LLM dropdown
-2. Pick a model (**tinyllama** recommended for CPU)
-3. Set **3–6 steps** (each step = 6 LLM calls; ~1 min per step with tinyllama)
-4. Click **Run**
-
 **From the command line:**
 ```bash
 # 3-step simulation with tinyllama
@@ -400,7 +394,7 @@ A 3-step simulation with 6 agents = ~18 LLM calls. Expect **~3 minutes** with ti
 
 7. **Governance** — the `RegulatoryAgent` checks that frequency stays within 49.0–51.0 Hz and that no generator exceeds its cumulative carbon cap. Any violations are logged with severity.
 
-8. **Results** — every step is persisted to SQLite, including weather data, agent states, market transactions, and regulatory events. The REST API exposes all data for dashboard visualization.
+8. **Results** — every step is persisted to SQLite, including weather data, agent states, market transactions, and regulatory events. The REST API exposes all data for programmatic analysis.
 
 ---
 
@@ -442,7 +436,6 @@ docker: docker build → run → curl health + simulation + 3 data endpoints
 | **Database** | SQLite (local) |
 | **API** | FastAPI + Pydantic v2 |
 | **ORM** | SQLAlchemy 2.0 |
-| **Dashboard** | Static HTML served via FastAPI + interactive charts |
 | **Container** | Docker + docker compose |
 | **Testing** | pytest + pytest-cov |
 | **CI** | GitHub Actions (3-job matrix: test, lint, docker) |
@@ -453,7 +446,7 @@ docker: docker build → run → curl health + simulation + 3 data endpoints
 
 | Method | Endpoint | Description |
 |:---|:---|:---|
-| `GET` | `/` | Root message with API docs and dashboard links |
+| `GET` | `/` | Root message with API docs |
 | `GET` | `/health` | System health check (API status, LLM backend mode) |
 | `POST` | `/simulation/run` | Start a grid simulation. Body: `{steps, llm_backend, ollama_model}` |
 | `GET` | `/simulation/status` | Current simulation state (steps completed, frequency, price) |
