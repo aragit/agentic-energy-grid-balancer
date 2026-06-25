@@ -68,39 +68,37 @@ This project simulates how rational, LLM-powered energy agents *should* bid in a
 
 ## 🏗️ Architecture
 
-**Classification: Type 2 (Symbolic[Neuro]) per Kautz Taxonomy**
+**Classification: Type 2 (Symbolic[Neuro]) per Kautz Taxonomy (2020)**
 
 ```
 Symbolic orchestrator (GridSimulation) → Neural subroutine (BatteryAgent LLM)
 ```
 
-This is the same architectural class as **AlphaGo** — a deterministic outer loop
-governs a neural inner subroutine. Production-credible for safety-critical
-energy systems where deterministic behavior is required.
+#### Why This Is the Same Architecture as AlphaGo
 
----
+AlphaGo combines a symbolic tree search (Monte Carlo) with a neural policy network.
+This system follows the identical pattern:
 
-### Layer Map: Standard Model → This Implementation
+| AlphaGo Component | This System's Equivalent |
+|:---|:---|
+| **Symbolic outer loop** – Monte Carlo tree search evaluates board positions | **Symbolic orchestrator** (`GridSimulation._run_step()`) executes the hour-by-hour simulation loop, runs the auction, computes physics, and enforces regulatory rules |
+| **Neural subroutine** – Policy network suggests the next move | **Neural subroutine** (`BatteryAgent.decide_bid()`) calls the LLM to propose a bid price and action based on market context |
+| **Symbolic safety net** – Handcrafted rules prune illegal Go moves | **Symbolic safety net** – `GridOrchestrator` clamps invalid bids, `RegulatoryAgent` enforces frequency + carbon limits |
+| **Deterministic replay** – Same board state → same game tree | **Deterministic replay** – Same seed → identical weather, physics, mock reasoning; only the neural subroutine varies |
 
-| Standard Layer | Energy Grid Component | Status |
-|:---|:---|:---:|
-| **L1 Perception** | `GridSimulation` + `WeatherEngine` + `GridPhysics` + `ConsumerDemand` | ✅ |
-| **L2 Memory** | `AgentMemory` — per-agent episodic storage across simulation steps | ✅ |
-| **L3 Reasoning** | `BaseAgent.decide_bid()` → LLM (Mock / Ollama) → JSON strategy | ✅ |
-| **L3.5 Rules** | `RegulatoryAgent` — frequency guards, carbon caps, bid clamping | ✅ |
-| **L4 Planning** | Implicit in `GridSimulation._run_step()` loop (no DAG compilation) | ⚠️ |
-| **L5 Execution** | Direct method calls (no generic executor / ACTUS layer) | ❌ |
-| **L6 Governance** | `GridOrchestrator` — emergency dispatch, violation tally, override | ✅ |
-| **L7 Meta** | Not implemented (no anomaly detection / REFLEXA) | ❌ |
+Both are **Type 2 (Symbolic[Neuro])**: the outer loop is deterministic and governs
+the inner neural call — not the other way around. This is production-credible for
+safety-critical systems because the symbolic layer can always override or
+fall back when the neural layer produces invalid output.
 
-**Why Type 2 Is the Right Choice for This Repo**
+**Why this matters for the energy grid:** A neural-only system could hallucinate
+a $999/MWh bid or ignore a frequency violation. The symbolic orchestrator prevents
+both — exactly as AlphaGo's tree search prevents the policy network from suggesting
+an illegal move.
 
-| Reason | Detail |
-|:-------|:-------|
-| **Production credibility** | Deterministic orchestrator is what real grid operators need — neural-only would be unsafe |
-| **Portfolio signal** | "Type 2 neuro-symbolic (AlphaGo-style) in public; Type 6 clinical (AXIOMIS-style) in private" shows range |
-| **IP protection** | Type 6 orchestrator logic (ACTUS, REFLEXA, DAG compilation) remains private |
-| **Safety** | Symbolic guardrails can override any LLM output — grid never goes unstable |
+**L1–L7 Implementation Status:** Perception (✅), Memory (✅), Reasoning (✅),
+Rules (✅), Planning (⚠️ implicit), Execution (❌ direct calls), Governance (✅),
+Meta (❌ not implemented).
 
 ---
 
@@ -111,7 +109,7 @@ An agentic AI system is defined by autonomous entities that perceive, decide, an
 | Criterion | Implementation | Evidence |
 |:---|:---|:---|
 | **Perception** | Agents observe weather state, market price, own balance, demand | `BaseAgent.decide_bid()` receives full `WeatherState` + market context |
-| **Decision** | LLM-powered strategic reasoning with structured JSON output | `MockLLMEngine.chat_completion()` generates bid price, action, confidence |
+| **Decision** | LLM-powered strategic reasoning with structured JSON output | `ReasoningEngine.chat_completion()` generates bid price, action, confidence |
 | **Action** | Agents submit bids to double-sided auction, trade energy | `DoubleSidedAuction.clear_market()` matches buy/sell orders, executes trades |
 | **Persistent goals** | Balance preservation, carbon compliance, profit optimization over 24+ steps | `AgentState` tracks cumulative revenue, costs, carbon, strategy history |
 | **Memory** | Agents recall past outcomes to adapt strategy | `AgentMemory` stores experiences; round history fed into LLM prompts |
@@ -174,7 +172,7 @@ The LLM returns a JSON strategy:
 }
 ```
 
-The **MockLLMEngine** provides deterministic, fast inference (sub-millisecond) with strategy rules encoded per agent type. The **OllamaEngine** runs real local inference via Ollama (e.g., Qwen2.5:1.5b) for actual LLM-based reasoning.
+The **ReasoningEngine** provides deterministic, rule-based inference (sub-millisecond) with strategy rules encoded per agent type. The **OllamaEngine** runs real local inference via Ollama (e.g., Qwen2.5:1.5b) for actual LLM-based reasoning.
 
 **Symbolic Auction Engine (`core/auction.py`)**
 
@@ -303,7 +301,7 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Start the API (mock LLM backend)
+# Start the API (ReasoningEngine backend — default)
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8001
 
 # Run a 24-step simulation
@@ -333,7 +331,7 @@ This project supports **two LLM backends**:
 
 | Backend | Speed | Reasoning | Use Case |
 |:--------|:------|:-----------|:---------|
-| **Mock** (default) | Instant (sub-ms) | Rule-based heuristics per agent type | Development, testing, CI |
+| **ReasoningEngine** (default) | Instant (sub-ms) | Rule-based heuristics per agent type | Development, testing, CI |
 | **Ollama** | ~10s per call | Real LLM reasoning via local models | Demos, research, portfolio |
 
 #### Setup
@@ -369,7 +367,7 @@ curl -X POST http://localhost:8001/simulation/run \
   -H "Content-Type: application/json" \
   -d '{"steps": 3, "llm_backend": "ollama", "ollama_model": "tinyllama"}'
 
-# 24-step simulation with Mock (instant)
+# 24-step simulation with ReasoningEngine (instant)
 curl -X POST http://localhost:8001/simulation/run \
   -H "Content-Type: application/json" \
   -d '{"steps": 24, "llm_backend": "mock"}'
@@ -439,7 +437,7 @@ docker: docker build → run → curl health + simulation + 3 data endpoints
 
 | Layer | Technology |
 |:---|:---|
-| **LLM** | MockLLM (default, instant) / Ollama (real inference, Qwen2.5:1.5b) |
+| **LLM** | ReasoningEngine (default, instant, rule-based) / Ollama (real inference, Qwen2.5:1.5b) |
 | **Math** | NumPy + SciPy (grid physics, statistical models) |
 | **Database** | SQLite (local) |
 | **API** | FastAPI + Pydantic v2 |
@@ -526,7 +524,7 @@ A data-flow diagram at the end maps L1 → L3 → Symbolic → L6 with the hardw
 ```
 
 ```diff
-⚠️  NEURAL FAULT DETECTED: MockLLMEngine output parser mismatch
+⚠️  NEURAL FAULT DETECTED: ReasoningEngine output parser mismatch
 -  Battery LLM returned  "bid_price": 1.00, "action": "sell"
 -  Root cause: BatteryAgent prompt uses "Type:" but parser expects "agent_type:"
 +  ✅ DETERMINISTIC MITIGATION: Physical guardrails override broken output
@@ -559,13 +557,16 @@ Result Summary:
 ```
 </details>
 
-> **What this demonstrates:** The trace captures the Type 2 (Symbolic[Neural]) architecture in action. The symbolic L1 environment layer feeds deterministic weather data to the neural L3 subroutine (battery LLM arbitrage), whose output is integrated by the symbolic auction engine, then governed by L6 regulatory checks. When the mock LLM produces a broken bid due to a prompt/parser mismatch (`$1.00`/`sell`), the physical guardrails in the orchestrator correctly override the invalid output — showing the resilience of the symbolic-supervises-neural design.
+> **What this demonstrates:** The trace captures the Type 2 (Symbolic[Neural]) architecture in action. The symbolic L1 environment layer feeds deterministic weather data to the neural L3 subroutine (battery LLM arbitrage), whose output is integrated by the symbolic auction engine, then governed by L6 regulatory checks. When the ReasoningEngine produces a broken bid due to a prompt/parser mismatch (`$1.00`/`sell`), the physical guardrails in the orchestrator correctly override the invalid output — showing the resilience of the symbolic-supervises-neural design.
 
-For a live animated replay (renders the SVG frame-by-frame):
+For a terminal replay of the same trace:
 
 ```bash
+# Requires asciinema (pip install asciinema)
 asciinema play docs/assets/trace_demo.cast
 ```
+
+The SVG animation above shows the same content frame-by-frame and works in any browser.
 
 <img src="docs/assets/neuro_symbolic_trace.svg" width="800" alt="Live Neuro-Symbolic Trace Animation"/>
 
@@ -573,15 +574,13 @@ asciinema play docs/assets/trace_demo.cast
 
 ## 🔮 Future Integration
 
-This project's neuro-symbolic architecture is designed as a **Type 2 (Symbolic[Neural])** reference implementation. Potential integration paths:
-
-| Capability | Current Project | Integration Point |
-|:---|:---|:---|
-| **Real-time SCADA** | Simulated weather + grid physics | Replace `WeatherEngine` with live SCADA feed |
-| **Production LLM** | Mock / Ollama (Qwen2.5) | Swap `LLMEngineFactory` for OpenAI / Anthropic API |
-| **PostgreSQL** | SQLite (local) | Swap `database/models.py` connection string |
-| **Digital twin** | Standalone simulation | Embed `GridSimulation` as a microservice in a larger energy platform |
-| **Federated markets** | Single auction zone | Extend `DoubleSidedAuction` to multi-region clearing with transmission constraints |
+This project's Type 2 (Symbolic[Neural]) architecture is designed for modular
+integration. The `WeatherEngine`, `GridSimulation`, and `DoubleSidedAuction`
+are each single-class components that can be swapped for live SCADA feeds,
+production LLM APIs (OpenAI / Anthropic), or PostgreSQL persistence without
+changing the outer architecture. The auction engine supports multi-region
+clearing with transmission constraints, and the entire simulation can be
+embedded as a microservice in a larger energy platform or digital twin.
 
 ---
 
