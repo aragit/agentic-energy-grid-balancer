@@ -34,6 +34,7 @@ Autonomous energy agents (solar, wind, coal, nuclear, battery, consumer) compete
   - [Docker](#docker-recommended)
   - [Local Development](#local-development)
   - [Run the Architecture Trace](#run-the-architecture-trace)
+  - [Using Ollama for Real LLM Inference](#using-ollama-for-real-llm-inference)
 - [How It Works](#-how-it-works)
 - [Testing](#-testing)
 - [Tech Stack](#-tech-stack)
@@ -67,7 +68,43 @@ This project simulates how rational, LLM-powered energy agents *should* bid in a
 
 ## 🏗️ Architecture
 
-### 1. Agentic AI Criteria
+**Classification: Type 2 (Symbolic[Neuro]) per Kautz Taxonomy**
+
+```
+Symbolic orchestrator (GridSimulation) → Neural subroutine (BatteryAgent LLM)
+```
+
+This is the same architectural class as **AlphaGo** — a deterministic outer loop
+governs a neural inner subroutine. Production-credible for safety-critical
+energy systems where deterministic behavior is required.
+
+---
+
+### Layer Map: Standard Model → This Implementation
+
+| Standard Layer | Energy Grid Component | Status |
+|:---|:---|:---:|
+| **L1 Perception** | `GridSimulation` + `WeatherEngine` + `GridPhysics` + `ConsumerDemand` | ✅ |
+| **L2 Memory** | `AgentMemory` — per-agent episodic storage across simulation steps | ✅ |
+| **L3 Reasoning** | `BaseAgent.decide_bid()` → LLM (Mock / Ollama) → JSON strategy | ✅ |
+| **L3.5 Rules** | `RegulatoryAgent` — frequency guards, carbon caps, bid clamping | ✅ |
+| **L4 Planning** | Implicit in `GridSimulation._run_step()` loop (no DAG compilation) | ⚠️ |
+| **L5 Execution** | Direct method calls (no generic executor / ACTUS layer) | ❌ |
+| **L6 Governance** | `GridOrchestrator` — emergency dispatch, violation tally, override | ✅ |
+| **L7 Meta** | Not implemented (no anomaly detection / REFLEXA) | ❌ |
+
+**Why Type 2 Is the Right Choice for This Repo**
+
+| Reason | Detail |
+|:-------|:-------|
+| **Production credibility** | Deterministic orchestrator is what real grid operators need — neural-only would be unsafe |
+| **Portfolio signal** | "Type 2 neuro-symbolic (AlphaGo-style) in public; Type 6 clinical (AXIOMIS-style) in private" shows range |
+| **IP protection** | Type 6 orchestrator logic (ACTUS, REFLEXA, DAG compilation) remains private |
+| **Safety** | Symbolic guardrails can override any LLM output — grid never goes unstable |
+
+---
+
+### Agentic AI Criteria
 
 An agentic AI system is defined by autonomous entities that perceive, decide, and act in an environment with persistent goals. Our system satisfies all six criteria:
 
@@ -87,9 +124,9 @@ Unlike simple API wrappers, these agents:
 - **Operate autonomously** for the full simulation lifecycle without human intervention
 - **Face competitive pressure** from other generator types, creating emergent dispatch dynamics
 
-### 2. Neuro-Symbolic Paradigm
+### Neuro-Symbolic Layer Breakdown
 
-**1. SYMBOLIC (Environment) Layer — L1 Perception (`core/grid_physics.py`)**
+**L1 — Perception (`core/grid_physics.py`, `core/simulation.py`)**
 
 The top-level outer loop is a symbolic environment simulation. At each hour step:
 
@@ -99,7 +136,20 @@ The top-level outer loop is a symbolic environment simulation. At each hour step
 
 This layer is **fully deterministic** given the RNG seed — it is the symbolic backbone.
 
-**2. NEURAL Subroutine — L3 Reasoning (`core/llm_engine.py`, `core/agents/`)**
+**L2 — Memory (`core/agents/base.py:AgentMemory`)**
+
+Each agent retains a memory of past experiences spanning the simulation:
+
+| Memory Field | Description |
+|:---|:---|
+| `RoundHistory` | Stores each step's clearing price, agent bid, action taken, and result |
+| `BalanceHistory` | Cumulative cash balance over time |
+| `CarbonHistory` | Per-step carbon emitted vs. remaining cap |
+| `StrategyCount` | Count of LLM queries made (for tracking reasoning overhead) |
+
+Memory feeds back into the LLM prompt — agents see their last 5 rounds of context when bidding, enabling adaptive strategy.
+
+**L3 — Reasoning (`core/llm_engine.py`, `core/agents/`)**
 
 The neural inner loop is invoked per agent per step. Each agent queries the LLM with a structured prompt containing:
 
@@ -126,7 +176,7 @@ The LLM returns a JSON strategy:
 
 The **MockLLMEngine** provides deterministic, fast inference (sub-millisecond) with strategy rules encoded per agent type. The **OllamaEngine** runs real local inference via Ollama (e.g., Qwen2.5:1.5b) for actual LLM-based reasoning.
 
-**3. SYMBOLIC (Market) Layer — Auction Engine (`core/auction.py`)**
+**Symbolic Auction Engine (`core/auction.py`)**
 
 The symbolic market layer takes all agent bids and performs uniform-price clearing:
 
@@ -137,7 +187,7 @@ The symbolic market layer takes all agent bids and performs uniform-price cleari
 - Carbon costs ($25/ton default) are added to generator bids, making dirty generation more expensive
 - Buyer surplus = Σ(bid_price − clearing_price); Seller surplus = Σ(clearing_price − ask_price)
 
-**4. SYMBOLIC (Governance) Layer — L6 Oversight (`core/agents/regulatory.py`)**
+**L6 — Governance (`core/agents/regulatory.py`, `core/orchestrator.py`)**
 
 The governance layer enforces physical and regulatory constraints:
 
@@ -181,7 +231,7 @@ This animated trace shows the four-layer architecture executing step-by-step. Th
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3. The Market Clearing Algorithm
+### The Market Clearing Algorithm
 
 #### The Problem: Optimal Dispatch Under Uncertainty
 
@@ -263,7 +313,7 @@ curl -X POST http://localhost:8001/simulation/run \
 
 # Query results
 curl http://localhost:8001/agents/performance
-curl http://localhost:8001/market/history
+curl http://localhost:8001/market/prices
 curl http://localhost:8001/carbon/report
 ```
 
@@ -274,6 +324,65 @@ python scripts/trace_neuro_symbolic.py
 ```
 
 This prints a 3-step trace showing L1 weather perception, L3 LLM reasoning, symbolic auction clearing, and L6 regulatory oversight in real time. It is the fastest way to understand the full architecture without reading code.
+
+---
+
+### Using Ollama for Real LLM Inference
+
+This project supports **two LLM backends**:
+
+| Backend | Speed | Reasoning | Use Case |
+|:--------|:------|:-----------|:---------|
+| **Mock** (default) | Instant (sub-ms) | Rule-based heuristics per agent type | Development, testing, CI |
+| **Ollama** | ~10s per call | Real LLM reasoning via local models | Demos, research, portfolio |
+
+#### Setup
+
+```bash
+# 1. Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+# or via snap:   sudo snap install ollama
+
+# 2. Start Ollama
+ollama serve
+
+# 3. Pull a model (tinyllama is fastest on CPU)
+ollama pull tinyllama        # ~600 MB,  ~10s per call
+ollama pull qwen2.5:1.5b     # ~1 GB,    ~30-60s per call (CPU)
+
+# 4. Verify it works
+curl http://localhost:11434/api/tags
+```
+
+#### Run a Simulation with Ollama
+
+**From the dashboard** (http://localhost:8001/static/index.html):
+1. Select **Ollama** from the LLM dropdown
+2. Pick a model (**tinyllama** recommended for CPU)
+3. Set **3–6 steps** (each step = 6 LLM calls; ~1 min per step with tinyllama)
+4. Click **Run**
+
+**From the command line:**
+```bash
+# 3-step simulation with tinyllama
+curl -X POST http://localhost:8001/simulation/run \
+  -H "Content-Type: application/json" \
+  -d '{"steps": 3, "llm_backend": "ollama", "ollama_model": "tinyllama"}'
+
+# 24-step simulation with Mock (instant)
+curl -X POST http://localhost:8001/simulation/run \
+  -H "Content-Type: application/json" \
+  -d '{"steps": 24, "llm_backend": "mock"}'
+```
+
+#### Model Notes
+
+| Model | CPU Time | Quality | Notes |
+|:------|:---------|:--------|:------|
+| **tinyllama** | ~10s/call | Basic | 1B params, Q4_0 quantized, fast on CPU |
+| **qwen2.5:1.5b** | ~30-60s/call | Good | 1.5B params, better reasoning, slower |
+
+A 3-step simulation with 6 agents = ~18 LLM calls. Expect **~3 minutes** with tinyllama, **~10–15 minutes** with qwen2.5:1.5b.
 
 ---
 
@@ -348,10 +457,11 @@ docker: docker build → run → curl health + simulation + 3 data endpoints
 |:---|:---|:---|
 | `GET` | `/` | Root message with API docs and dashboard links |
 | `GET` | `/health` | System health check (API status, LLM backend mode) |
-| `POST` | `/simulation/run` | Start a new grid simulation (returns full result synchronously) |
+| `POST` | `/simulation/run` | Start a grid simulation. Body: `{steps, llm_backend, ollama_model}` |
 | `GET` | `/simulation/status` | Current simulation state (steps completed, frequency, price) |
 | `GET` | `/agents/performance` | Per-agent financials (balance, revenue, costs, carbon, strategy count) |
 | `GET` | `/market/history` | All transactions + price trend |
+| `GET` | `/market/prices` | Price history as a numeric array (for charting) |
 | `GET` | `/carbon/report` | Total carbon emissions, cost, and per-agent breakdown |
 
 ---
