@@ -209,8 +209,9 @@ pytest tests/ -v
 python scripts/trace_neuro_symbolic.py
 ```
 
-Prints a 3-step trace showing L1 weather → L3 battery LLM reasoning → auction
-clearing → L6 regulatory oversight with data-flow diagram.
+Prints a 3-step trace showing L1 weather → L3 battery LLM reasoning → Pydantic
+validation + battery guardrails → orchestrator bid validation → auction clearing
+→ L6 regulatory oversight with data-flow diagram.
 
 ---
 
