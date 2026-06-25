@@ -19,10 +19,6 @@ validates bids, clears the market, computes grid physics, and enforces
 regulatory constraints. A neural subroutine (battery LLM) proposes arbitrage
 strategies — bounded by Pydantic validation and physical guardrails.
 
-**Architecture: Type 2 (Symbolic[Neuro]) per Kautz taxonomy (2020).**
-
-**How the neural subroutine integrates:**
-
 ---
 
 ## Type 2 Architecture — Why This Qualifies
