@@ -112,7 +112,9 @@ class GridSimulation:
         else:
             demand = 500.0
 
-        # Build bids
+        # =====================================================================
+        # PHASE 1: AGENTS PROPOSE BIDS (Neural + Symbolic subroutines)
+        # =====================================================================
         bids = []
 
         # Consumer bids based on willingness-to-pay (rule-based — demand curve)
@@ -201,8 +203,23 @@ class GridSimulation:
             else:
                 logger.info("[BATTERY BID] HOLD — no bid submitted")
 
-        # Clear market
-        clearing = self.auction.clear_market(bids)
+        # =====================================================================
+        # PHASE 2: ORCHESTRATOR VALIDATES BIDS (Type 2 Symbolic Gatekeeper)
+        # =====================================================================
+        carbon_cap_remaining = self.regulator.carbon_cap - sum(
+            a.state.total_carbon_emitted for a in self.agents
+        )
+        validated_bids = self.orchestrator.validate_bids(
+            bids=bids,
+            current_frequency=self.physics.frequency,
+            current_demand=demand,
+            carbon_cap_remaining=max(0, carbon_cap_remaining),
+        )
+
+        # =====================================================================
+        # PHASE 3: AUCTION CLEARS WITH VALIDATED BIDS ONLY
+        # =====================================================================
+        clearing = self.auction.clear_market(validated_bids)
 
         # Calculate actual supply vs demand
         actual_supply = 0.0
@@ -254,6 +271,9 @@ class GridSimulation:
         imbalance = actual_supply - demand_met
         frequency = self.physics.compute_frequency(imbalance)
 
+        # =====================================================================
+        # PHASE 4: POST-CLEARING FREQUENCY STABILIZATION (reactive)
+        # =====================================================================
         if not self.physics.is_stable(frequency):
             action = self.orchestrator.stabilize(frequency, imbalance, self.agents)
             if action["action"] == "dispatch":
@@ -267,6 +287,7 @@ class GridSimulation:
 
         logger.info(
             f"[STEP {step}] RawGen={sum(raw_generation.values()):.1f}MW, Demand={demand:.1f}MW, "
+            f"Bids={len(bids)}, Validated={len(validated_bids)}, "
             f"Traded={clearing.total_traded_mwh:.1f}MW, Supply={actual_supply:.1f}MW, "
             f"Imbalance={imbalance:.1f}MW, Freq={frequency:.3f}Hz, Price=${clearing.clearing_price}"
         )
