@@ -21,36 +21,6 @@ strategies — bounded by Pydantic validation and physical guardrails.
 
 **Architecture: Type 2 (Symbolic[Neuro]) per Kautz taxonomy (2020).**
 
-> **ChatGPT prompt for architecture diagram:**
->
-> *"Create a clean system architecture diagram (SVG/PNG) for a Type 2
-> (Symbolic[Neuro]) energy grid simulation. The diagram has 4 colored zones:
->
-> Zone 1 — User/Client (curl, Swagger) on the left, arrows pointing right.
->
-> Zone 2 — API Layer (FastAPI with /simulation/run, /health, /market/* endpoints).
->
-> Zone 3 — Symbolic Outer Loop (blue background), the primary controller,
-> containing: GridSimulation.run() → GridOrchestratorAgent.validate_bids()
-> → DoubleSidedAuction (midpoint pricing) → GridPhysics (weather + frequency)
-> → RegulatoryAgent (carbon + frequency checks). These flow left-to-right.
->
-> Zone 4 — below or beside the loop, two sub-rows:
->   (a) Deterministic Agents (green background): SolarFarm ($0+$5), WindFarm
->   ($0+$5), CoalPlant ($20+$25/ton carbon+$5), NuclearPlant ($5+$5),
->   MetroCity consumer (piecewise WTP $45-$85). All arrow into Orchestrator.
->   (b) Neural Subroutine (purple background) showing: LLMEngineFactory
->   branches to ReasoningEngine (rule-based) and Ollama (tinyllama/qwen2.5);
->   both output JSON to BidStrategy Pydantic boundary (red border); then to
->   BatteryGuardrails (orange, <5% force charge, >95% force discharge); then
->   arrow into Orchestrator.
->
-> Also show: AgentMemory (in-memory context) feeding LLMEngineFactory; SQLAlchemy models (defined, unused) with a dashed line; SimulationResult JSON as final output.
->
-> Use a technical color scheme with clean boxes, rounded corners, thin borders,
-> no clipart. Label all arrows with brief text like 'POST /simulation/run' or
-> 'validated bid'. No title block needed."*
-
 **How the neural subroutine integrates:**
 
 ---
