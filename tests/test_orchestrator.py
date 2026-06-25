@@ -1,7 +1,5 @@
 """Tests for grid orchestrator and regulatory agents."""
 
-import pytest
-
 
 class TestGridOrchestrator:
     def test_normal_no_action(self, orchestrator):

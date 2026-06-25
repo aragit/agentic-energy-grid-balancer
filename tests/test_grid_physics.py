@@ -1,7 +1,6 @@
 """Tests for grid physics, weather, and demand models."""
 
-import pytest
-from core.grid_physics import WeatherEngine, GridPhysics, DemandModel
+from core.grid_physics import WeatherEngine, DemandModel
 
 
 class TestWeatherEngine:
@@ -76,7 +75,7 @@ class TestGridPhysics:
 
     def test_frequency_damping(self, physics):
         # Large imbalance should not cause immediate 53Hz
-        f1 = physics.compute_frequency(500.0)
+        physics.compute_frequency(500.0)
         f2 = physics.compute_frequency(500.0)
         assert f2 <= 53.0  # Damping prevents exceeding 53
 

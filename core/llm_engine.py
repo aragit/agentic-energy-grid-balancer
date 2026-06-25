@@ -5,7 +5,7 @@ import json
 import time
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,12 @@ class LLMResponse:
 
 class BaseLLMEngine(ABC):
     @abstractmethod
-    def chat_completion(self, messages: List[Dict[str, str]], temperature: float = 0.7, max_tokens: int = 512) -> LLMResponse:
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+    ) -> LLMResponse:
         pass
 
     @abstractmethod
@@ -33,6 +38,7 @@ class BaseLLMEngine(ABC):
 class MockLLMEngine(BaseLLMEngine):
     def __init__(self, seed: int = 42):
         import random
+
         self.rng = random.Random(seed)
         self.model_name = "mock-llm-energy"
         logger.info("[LLM] Using MockLLM")
@@ -48,11 +54,18 @@ class MockLLMEngine(BaseLLMEngine):
         content = self._generate_strategy(agent_type, market_price, balance, demand)
         latency_ms = (time.time() - start) * 1000
 
-        return LLMResponse(content=content, tokens_in=len(str(messages)), tokens_out=len(content.split()), latency_ms=latency_ms, model=self.model_name)
+        return LLMResponse(
+            content=content,
+            tokens_in=len(str(messages)),
+            tokens_out=len(content.split()),
+            latency_ms=latency_ms,
+            model=self.model_name,
+        )
 
     def _extract_field(self, text, key):
         idx = text.lower().find(key.lower())
-        if idx == -1: return ""
+        if idx == -1:
+            return ""
         start = idx + len(key)
         end = text.find("\n", start)
         return text[start:end].strip() if end != -1 else text[start:].strip()
@@ -60,7 +73,8 @@ class MockLLMEngine(BaseLLMEngine):
     def _extract_float(self, text, key):
         try:
             idx = text.lower().find(key.lower())
-            if idx == -1: return 0.0
+            if idx == -1:
+                return 0.0
             start = idx + len(key)
             # FIX: Skip currency symbols, whitespace, colons, equals
             while start < len(text) and text[start] in " \t$=:,":
@@ -114,13 +128,15 @@ class MockLLMEngine(BaseLLMEngine):
             action = "sell"
             reasoning = "Default strategy, following market"
 
-        return json.dumps({
-            "bid_price": bid,
-            "output_adjustment": action,
-            "carbon_trade": 0.0,
-            "reasoning": reasoning,
-            "confidence": round(self.rng.uniform(0.7, 0.95), 2),
-        })
+        return json.dumps(
+            {
+                "bid_price": bid,
+                "output_adjustment": action,
+                "carbon_trade": 0.0,
+                "reasoning": reasoning,
+                "confidence": round(self.rng.uniform(0.7, 0.95), 2),
+            }
+        )
 
     def shutdown(self):
         pass
@@ -135,18 +151,29 @@ class OllamaEngine(BaseLLMEngine):
 
     def chat_completion(self, messages, temperature=0.7, max_tokens=512):
         import httpx
+
         start = time.time()
         response = httpx.post(
             f"{self.host}/api/chat",
-            json={"model": self.model, "messages": messages, "stream": False,
-                  "options": {"temperature": temperature, "num_predict": max_tokens}},
+            json={
+                "model": self.model,
+                "messages": messages,
+                "stream": False,
+                "options": {"temperature": temperature, "num_predict": max_tokens},
+            },
             timeout=60.0,
         )
         response.raise_for_status()
         data = response.json()
         content = data["message"]["content"]
         latency_ms = (time.time() - start) * 1000
-        return LLMResponse(content=content, tokens_in=0, tokens_out=0, latency_ms=latency_ms, model=self.model_name)
+        return LLMResponse(
+            content=content,
+            tokens_in=0,
+            tokens_out=0,
+            latency_ms=latency_ms,
+            model=self.model_name,
+        )
 
     def shutdown(self):
         pass

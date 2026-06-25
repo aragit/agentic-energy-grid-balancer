@@ -1,9 +1,5 @@
 """Tests for agent behavior, state, and memory."""
 
-import pytest
-from core.agents.base import AgentState
-from core.memory import Experience
-
 
 class TestSolarAgent:
     def test_compute_output_day(self, solar_agent, weather):
@@ -39,10 +35,18 @@ class TestWindAgent:
 
     def test_high_wind_output(self, wind_agent, weather):
         class MockRNG:
-            def normal(self, *a): return 0
-            def random(self): return 0.5
-            def exponential(self, *a): return 15
-            def uniform(self, *a): return 0
+            def normal(self, *a):
+                return 0
+
+            def random(self):
+                return 0.5
+
+            def exponential(self, *a):
+                return 15
+
+            def uniform(self, *a):
+                return 0
+
         weather.rng = MockRNG()
         state = weather.step()
         output = wind_agent.compute_output(state, 50.0)

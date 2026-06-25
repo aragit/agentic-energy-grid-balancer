@@ -1,7 +1,6 @@
 """Tests for double-sided auction and market clearing."""
 
-import pytest
-from core.auction import DoubleSidedAuction, Bid, MarketClearing
+from core.auction import Bid
 
 
 class TestDoubleSidedAuction:

@@ -3,15 +3,18 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from typing import List, Dict
+from typing import List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from api.schemas import (
-    HealthResponse, SimulationRequest, SimulationResponse,
-    AgentPerformanceResponse, GridStateResponse,
-    CarbonReportResponse, MarketHistoryResponse,
+    HealthResponse,
+    SimulationRequest,
+    SimulationResponse,
+    AgentPerformanceResponse,
+    CarbonReportResponse,
+    MarketHistoryResponse,
 )
 from core.llm_engine import LLMEngineFactory
 from core.simulation import GridSimulation
@@ -85,7 +88,11 @@ async def simulation_status():
     return {
         "steps_completed": len(current_simulation.auction.price_history),
         "current_frequency": round(current_simulation.physics.frequency, 3),
-        "current_price": current_simulation.auction.price_history[-1] if current_simulation.auction.price_history else 50.0,
+        "current_price": (
+            current_simulation.auction.price_history[-1]
+            if current_simulation.auction.price_history
+            else 50.0
+        ),
     }
 
 
@@ -96,15 +103,17 @@ async def agent_performance():
 
     results = []
     for agent in current_simulation.agents:
-        results.append(AgentPerformanceResponse(
-            agent_name=agent.name,
-            agent_type=agent.agent_type,
-            balance=round(agent.state.balance, 2),
-            total_revenue=round(agent.state.total_revenue, 2),
-            total_cost=round(agent.state.total_cost, 2),
-            total_carbon_emitted=round(agent.state.total_carbon_emitted, 2),
-            strategy_count=len(agent.state.strategy_history),
-        ))
+        results.append(
+            AgentPerformanceResponse(
+                agent_name=agent.name,
+                agent_type=agent.agent_type,
+                balance=round(agent.state.balance, 2),
+                total_revenue=round(agent.state.total_revenue, 2),
+                total_cost=round(agent.state.total_cost, 2),
+                total_carbon_emitted=round(agent.state.total_carbon_emitted, 2),
+                strategy_count=len(agent.state.strategy_history),
+            )
+        )
     return results
 
 
@@ -127,12 +136,14 @@ async def carbon_report():
     total_carbon = sum(a.state.total_carbon_emitted for a in current_simulation.agents)
     breakdown = []
     for agent in current_simulation.agents:
-        breakdown.append({
-            "agent_name": agent.name,
-            "agent_type": agent.agent_type,
-            "carbon_kg": round(agent.state.total_carbon_emitted, 2),
-            "carbon_intensity": agent.state.carbon_intensity_g_kwh,
-        })
+        breakdown.append(
+            {
+                "agent_name": agent.name,
+                "agent_type": agent.agent_type,
+                "carbon_kg": round(agent.state.total_carbon_emitted, 2),
+                "carbon_intensity": agent.state.carbon_intensity_g_kwh,
+            }
+        )
 
     return CarbonReportResponse(
         total_carbon_kg=round(total_carbon, 2),
@@ -143,4 +154,8 @@ async def carbon_report():
 
 @app.get("/")
 async def root():
-    return {"message": "Agentic Energy Grid Balancer API", "docs": "/docs", "dashboard": "/static/index.html"}
+    return {
+        "message": "Agentic Energy Grid Balancer API",
+        "docs": "/docs",
+        "dashboard": "/static/index.html",
+    }

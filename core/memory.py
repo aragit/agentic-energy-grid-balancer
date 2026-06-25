@@ -51,7 +51,9 @@ class AgentMemory:
         }
 
     def _find_best_price_range(self) -> str:
-        profitable = [(e.market_price, e.net_profit) for e in self.experiences if e.net_profit > 0]
+        profitable = [
+            (e.market_price, e.net_profit) for e in self.experiences if e.net_profit > 0
+        ]
         if not profitable:
             return "unknown"
         prices = [p for p, _ in profitable]
@@ -95,7 +97,11 @@ Memory Summary (last {len(self.experiences)} steps):
 Recent experiences (last 5):
 """
         for exp in recent:
-            context += f"  Step {exp.step}: Market=${exp.market_price}, Bid=${exp.bid_price}, Output={exp.output_mw}MW, Profit=${exp.net_profit}, Outcome={exp.outcome}\n"
+            context += (
+                f"  Step {exp.step}: Market=${exp.market_price}, "
+                f"Bid=${exp.bid_price}, Output={exp.output_mw}MW, "
+                f"Profit=${exp.net_profit}, Outcome={exp.outcome}\n"
+            )
         return context
 
     def get_strategy_advice(self) -> str:
@@ -125,7 +131,11 @@ class SimulationMemory:
         for record in agent_records:
             name = record["agent_name"]
             if name not in self.agent_profiles:
-                self.agent_profiles[name] = {"runs": 0, "total_profit": 0.0, "avg_profit": 0.0}
+                self.agent_profiles[name] = {
+                    "runs": 0,
+                    "total_profit": 0.0,
+                    "avg_profit": 0.0,
+                }
             profile = self.agent_profiles[name]
             profile["runs"] += 1
             profile["total_profit"] += record.get("final_balance", 0)
@@ -135,7 +145,11 @@ class SimulationMemory:
         profile = self.agent_profiles.get(agent_name)
         if not profile:
             return f"No historical data for {agent_name}."
-        return f"Long-term Profile for {agent_name}:\n- Runs: {profile['runs']}\n- Avg profit: ${profile['avg_profit']:.2f}\n- Total: ${profile['total_profit']:.2f}"
+        return (
+            f"Long-term Profile for {agent_name}:\n- Runs: {profile['runs']}\n"
+            f"- Avg profit: ${profile['avg_profit']:.2f}\n"
+            f"- Total: ${profile['total_profit']:.2f}"
+        )
 
     def add_system_learning(self, insight: str):
         self.system_learnings.append(insight)
@@ -144,4 +158,6 @@ class SimulationMemory:
     def get_system_context(self) -> str:
         if not self.system_learnings:
             return "No system-level learnings yet."
-        return "System Learnings:\n" + "\n".join(f"- {l}" for l in self.system_learnings[-5:])
+        return "System Learnings:\n" + "\n".join(
+            f"- {item}" for item in self.system_learnings[-5:]
+        )

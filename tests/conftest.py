@@ -2,8 +2,8 @@
 
 import pytest
 from core.llm_engine import MockLLMEngine
-from core.grid_physics import WeatherEngine, GridPhysics, DemandModel
-from core.auction import DoubleSidedAuction, Bid
+from core.grid_physics import WeatherEngine, GridPhysics
+from core.auction import DoubleSidedAuction
 from core.agents.solar import SolarAgent
 from core.agents.wind import WindAgent
 from core.agents.coal import CoalAgent
@@ -13,7 +13,7 @@ from core.agents.consumer import ConsumerAgent
 from core.agents.orchestrator import GridOrchestratorAgent
 from core.agents.regulatory import RegulatoryAgent
 from core.simulation import GridSimulation
-from core.memory import AgentMemory, Experience
+from core.memory import Experience
 
 
 @pytest.fixture

@@ -28,13 +28,21 @@ class AgentState:
 
 
 class BaseAgent(ABC):
-    def __init__(self, name: str, agent_type: str, capacity_mw: float,
-                 carbon_intensity_g_kwh: float, llm: BaseLLMEngine):
+    def __init__(
+        self,
+        name: str,
+        agent_type: str,
+        capacity_mw: float,
+        carbon_intensity_g_kwh: float,
+        llm: BaseLLMEngine,
+    ):
         self.name = name
         self.agent_type = agent_type
         self.llm = llm
         self.state = AgentState(
-            name=name, agent_type=agent_type, capacity_mw=capacity_mw,
+            name=name,
+            agent_type=agent_type,
+            capacity_mw=capacity_mw,
             carbon_intensity_g_kwh=carbon_intensity_g_kwh,
         )
         self.memory = AgentMemory(max_history=100)
@@ -43,14 +51,26 @@ class BaseAgent(ABC):
     def compute_output(self, weather: Any, market_price: float) -> float:
         pass
 
-    def decide_bid(self, market_price: float, demand: float,
-                   frequency: float, carbon_price: float,
-                   weather: Dict[str, Any] = None) -> Dict[str, Any]:
+    def decide_bid(
+        self,
+        market_price: float,
+        demand: float,
+        frequency: float,
+        carbon_price: float,
+        weather: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
         memory_context = self.memory.get_context(current_step=0)
         strategy_advice = self.memory.get_strategy_advice()
 
-        prompt = self._build_prompt(market_price, demand, frequency, carbon_price,
-                                    memory_context, strategy_advice, weather)
+        prompt = self._build_prompt(
+            market_price,
+            demand,
+            frequency,
+            carbon_price,
+            memory_context,
+            strategy_advice,
+            weather,
+        )
         messages = [{"role": "system", "content": prompt}]
 
         try:
@@ -73,16 +93,22 @@ class BaseAgent(ABC):
             "carbon_trade": round(float(strategy.get("carbon_trade", 0.0)), 2),
             "reasoning": strategy.get("reasoning", "Fallback strategy"),
             "confidence": float(strategy.get("confidence", 0.5)),
-            "latency_ms": getattr(response, 'latency_ms', 0),
+            "latency_ms": getattr(response, "latency_ms", 0),
         }
 
         self.state.strategy_history.append(decision)
         return decision
 
-    def _build_prompt(self, market_price: float, demand: float,
-                      frequency: float, carbon_price: float,
-                      memory_context: str, strategy_advice: str,
-                      weather: Dict[str, Any] = None) -> str:
+    def _build_prompt(
+        self,
+        market_price: float,
+        demand: float,
+        frequency: float,
+        carbon_price: float,
+        memory_context: str,
+        strategy_advice: str,
+        weather: Dict[str, Any] = None,
+    ) -> str:
         weather_str = json.dumps(weather) if weather else "N/A"
         return f"""You are an autonomous energy market agent with memory and learning.
 
@@ -108,7 +134,8 @@ Strategic Advice:
 Respond with JSON:
 {{
     "bid_price": float,
-    "output_adjustment": "sell" | "ramp_down" | "ramp_up" | "maintain" | "charge" | "discharge" | "reduce_demand" | "hold",
+    "output_adjustment": "sell" | "ramp_down" | "ramp_up"
+    | "maintain" | "charge" | "discharge" | "reduce_demand" | "hold",
     "carbon_trade": float,
     "reasoning": "string",
     "confidence": 0.0-1.0
@@ -124,19 +151,34 @@ Respond with JSON:
             "confidence": 0.5,
         }
 
-    def update_after_trade(self, energy_mwh: float, price_per_mwh: float,
-                           carbon_cost: float = 0.0, step: int = 0,
-                           weather: Dict[str, Any] = None):
+    def update_after_trade(
+        self,
+        energy_mwh: float,
+        price_per_mwh: float,
+        carbon_cost: float = 0.0,
+        step: int = 0,
+        weather: Dict[str, Any] = None,
+    ):
         revenue = energy_mwh * price_per_mwh
         net_profit = revenue - carbon_cost
 
         experience = Experience(
-            step=step, market_price=price_per_mwh,
-            bid_price=self.state.strategy_history[-1]["bid_price"] if self.state.strategy_history else price_per_mwh,
-            output_mw=abs(energy_mwh), revenue=revenue,
-            carbon_cost=carbon_cost, net_profit=net_profit,
-            frequency=50.0, weather=weather or {},
-            decision=self.state.strategy_history[-1] if self.state.strategy_history else {},
+            step=step,
+            market_price=price_per_mwh,
+            bid_price=(
+                self.state.strategy_history[-1]["bid_price"]
+                if self.state.strategy_history
+                else price_per_mwh
+            ),
+            output_mw=abs(energy_mwh),
+            revenue=revenue,
+            carbon_cost=carbon_cost,
+            net_profit=net_profit,
+            frequency=50.0,
+            weather=weather or {},
+            decision=(
+                self.state.strategy_history[-1] if self.state.strategy_history else {}
+            ),
             outcome="profitable" if net_profit > 0 else "loss",
         )
         self.memory.record(experience)
@@ -144,7 +186,9 @@ Respond with JSON:
         self.state.balance += net_profit
         self.state.total_revenue += revenue
         self.state.total_cost += carbon_cost
-        self.state.total_carbon_emitted += energy_mwh * self.state.carbon_intensity_g_kwh / 1000
+        self.state.total_carbon_emitted += (
+            energy_mwh * self.state.carbon_intensity_g_kwh / 1000
+        )
 
     def record_output(self, output_mw: float):
         self.state.current_output_mw = output_mw

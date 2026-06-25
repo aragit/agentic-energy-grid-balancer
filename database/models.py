@@ -1,8 +1,18 @@
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, ForeignKey, JSON
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    Float,
+    String,
+    DateTime,
+    ForeignKey,
+    JSON,
+)
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 Base = declarative_base()
+
 
 class Simulation(Base):
     __tablename__ = "simulations"
@@ -16,7 +26,10 @@ class Simulation(Base):
     total_demand_mwh = Column(Float, default=0.0)
     total_supply_mwh = Column(Float, default=0.0)
     steps = relationship("GridStep", back_populates="simulation", cascade="all, delete")
-    transactions = relationship("MarketTransaction", back_populates="simulation", cascade="all, delete")
+    transactions = relationship(
+        "MarketTransaction", back_populates="simulation", cascade="all, delete"
+    )
+
 
 class GridStep(Base):
     __tablename__ = "grid_steps"
@@ -41,6 +54,7 @@ class GridStep(Base):
     carbon_emitted_kg = Column(Float, default=0.0)
     simulation = relationship("Simulation", back_populates="steps")
 
+
 class AgentRecord(Base):
     __tablename__ = "agents"
     id = Column(Integer, primary_key=True)
@@ -58,6 +72,7 @@ class AgentRecord(Base):
     strategy_config = Column(JSON, default=dict)
     decision_history = Column(JSON, default=list)
 
+
 class MarketTransaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True)
@@ -72,6 +87,7 @@ class MarketTransaction(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     simulation = relationship("Simulation", back_populates="transactions")
 
+
 class CarbonRecord(Base):
     __tablename__ = "carbon_records"
     id = Column(Integer, primary_key=True)
@@ -83,11 +99,16 @@ class CarbonRecord(Base):
     carbon_price = Column(Float, default=0.0)
     carbon_cost = Column(Float, default=0.0)
 
-engine = create_engine("sqlite:///./energy_grid.db", connect_args={"check_same_thread": False})
+
+engine = create_engine(
+    "sqlite:///./energy_grid.db", connect_args={"check_same_thread": False}
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()

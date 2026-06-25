@@ -63,15 +63,17 @@ class DoubleSidedAuction:
             carbon_kg = trade_qty * carbon_intensity
             carbon_cost = (carbon_kg / 1000) * self.carbon_price
 
-            transactions.append({
-                "buyer": buy.agent_name,
-                "seller": sell.agent_name,
-                "quantity_mwh": round(trade_qty, 2),
-                "price_per_mwh": round(clearing_price, 2),
-                "total_cost": round(trade_qty * clearing_price, 2),
-                "carbon_kg": round(carbon_kg, 2),
-                "carbon_cost": round(carbon_cost, 2),
-            })
+            transactions.append(
+                {
+                    "buyer": buy.agent_name,
+                    "seller": sell.agent_name,
+                    "quantity_mwh": round(trade_qty, 2),
+                    "price_per_mwh": round(clearing_price, 2),
+                    "total_cost": round(trade_qty * clearing_price, 2),
+                    "carbon_kg": round(carbon_kg, 2),
+                    "carbon_cost": round(carbon_cost, 2),
+                }
+            )
 
             total_traded += trade_qty
             carbon_cost_total += carbon_cost
@@ -85,8 +87,14 @@ class DoubleSidedAuction:
                 j += 1
 
         clearing_price = self._compute_clearing_price(transactions)
-        buyer_surplus = sum(t["quantity_mwh"] * (t["price_per_mwh"] - clearing_price) for t in transactions)
-        seller_surplus = sum(t["quantity_mwh"] * (clearing_price - t["price_per_mwh"]) for t in transactions)
+        buyer_surplus = sum(
+            t["quantity_mwh"] * (t["price_per_mwh"] - clearing_price)
+            for t in transactions
+        )
+        seller_surplus = sum(
+            t["quantity_mwh"] * (clearing_price - t["price_per_mwh"])
+            for t in transactions
+        )
 
         result = MarketClearing(
             clearing_price=round(clearing_price, 2),
@@ -107,17 +115,23 @@ class DoubleSidedAuction:
         if not transactions:
             # Default price with supply/demand signal
             return 50.0
-        
+
         # Weighted average of matched prices
-        weighted_price = sum(t["price_per_mwh"] * t["quantity_mwh"] for t in transactions) / sum(t["quantity_mwh"] for t in transactions)
-        
+        weighted_price = sum(
+            t["price_per_mwh"] * t["quantity_mwh"] for t in transactions
+        ) / sum(t["quantity_mwh"] for t in transactions)
+
         # Clamp to reasonable range
         return min(120.0, max(25.0, weighted_price))
 
     def _get_carbon_intensity(self, agent_type: str) -> float:
         intensities = {
-            "solar": 0.0, "wind": 0.0, "nuclear": 0.0,
-            "coal": 820.0, "gas": 490.0, "battery": 0.0,
+            "solar": 0.0,
+            "wind": 0.0,
+            "nuclear": 0.0,
+            "coal": 820.0,
+            "gas": 490.0,
+            "battery": 0.0,
         }
         return intensities.get(agent_type, 0.0)
 

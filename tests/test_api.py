@@ -26,8 +26,7 @@ class TestHealthEndpoint:
 class TestSimulationEndpoints:
     def test_run_simulation(self, client):
         response = client.post(
-            "/simulation/run",
-            json={"steps": 5, "llm_backend": "mock"}
+            "/simulation/run", json={"steps": 5, "llm_backend": "mock"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -38,8 +37,7 @@ class TestSimulationEndpoints:
 
     def test_run_simulation_custom_steps(self, client):
         response = client.post(
-            "/simulation/run",
-            json={"steps": 3, "llm_backend": "mock"}
+            "/simulation/run", json={"steps": 3, "llm_backend": "mock"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -105,15 +103,13 @@ class TestSimulationEndpoints:
 class TestSimulationValidation:
     def test_run_simulation_negative_steps(self, client):
         response = client.post(
-            "/simulation/run",
-            json={"steps": -1, "llm_backend": "mock"}
+            "/simulation/run", json={"steps": -1, "llm_backend": "mock"}
         )
         # Should either reject or handle gracefully
         assert response.status_code in [200, 422]
 
     def test_run_simulation_zero_steps(self, client):
         response = client.post(
-            "/simulation/run",
-            json={"steps": 0, "llm_backend": "mock"}
+            "/simulation/run", json={"steps": 0, "llm_backend": "mock"}
         )
         assert response.status_code in [200, 422]

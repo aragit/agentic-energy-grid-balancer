@@ -1,5 +1,6 @@
 from core.agents.base import BaseAgent
 
+
 class WindAgent(BaseAgent):
     def __init__(self, name: str, capacity_mw: float, llm):
         super().__init__(name, "wind", capacity_mw, carbon_intensity_g_kwh=0.0, llm=llm)

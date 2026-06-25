@@ -2,7 +2,7 @@
 
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Dict
 
 
 @dataclass
@@ -62,7 +62,9 @@ class WeatherEngine:
         wind_speed = np.clip(wind_speed, 0, 25)
 
         temp_base = 15 + 10 * np.sin(2 * np.pi * (self.day_of_year - 80) / 365)
-        temp_diurnal = 5 * np.sin(np.pi * (self.hour - 6) / 12) if 6 <= self.hour <= 18 else -3
+        temp_diurnal = (
+            5 * np.sin(np.pi * (self.hour - 6) / 12) if 6 <= self.hour <= 18 else -3
+        )
         temperature = temp_base + temp_diurnal + self.rng.normal(0, 2)
 
         return WeatherState(

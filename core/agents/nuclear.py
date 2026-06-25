@@ -1,8 +1,11 @@
 from core.agents.base import BaseAgent
 
+
 class NuclearAgent(BaseAgent):
     def __init__(self, name: str, capacity_mw: float, llm):
-        super().__init__(name, "nuclear", capacity_mw, carbon_intensity_g_kwh=0.0, llm=llm)
+        super().__init__(
+            name, "nuclear", capacity_mw, carbon_intensity_g_kwh=0.0, llm=llm
+        )
 
     def compute_output(self, weather, market_price: float) -> float:
         target = self.state.capacity_mw * 0.95

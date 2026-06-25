@@ -10,7 +10,9 @@ class BatteryAgent(BaseAgent):
     """Battery energy storage system with charge/discharge arbitrage."""
 
     def __init__(self, name: str, capacity_mwh: float, max_charge_mw: float, llm):
-        super().__init__(name, "battery", max_charge_mw, carbon_intensity_g_kwh=0.0, llm=llm)
+        super().__init__(
+            name, "battery", max_charge_mw, carbon_intensity_g_kwh=0.0, llm=llm
+        )
         self.capacity_mwh = capacity_mwh
         self.charge_level = 0.5 * capacity_mwh  # Start at 50%
         self.max_charge_mw = max_charge_mw
@@ -38,9 +40,14 @@ class BatteryAgent(BaseAgent):
         self.charge_level = max(0, min(self.capacity_mwh, self.charge_level))
         self.record_output(-mwh)  # Positive output = discharging
 
-    def update_after_trade(self, energy_mwh: float, price_per_mwh: float,
-                           carbon_cost: float = 0.0, step: int = 0,
-                           weather: Dict = None):
+    def update_after_trade(
+        self,
+        energy_mwh: float,
+        price_per_mwh: float,
+        carbon_cost: float = 0.0,
+        step: int = 0,
+        weather: Dict = None,
+    ):
         """Override to track battery-specific profit and record memory."""
         revenue = energy_mwh * price_per_mwh
         net_profit = revenue - carbon_cost
@@ -54,30 +61,49 @@ class BatteryAgent(BaseAgent):
             self.state.balance -= abs(revenue)
             self.state.total_cost += abs(revenue)
 
-        self.state.total_carbon_emitted += energy_mwh * self.state.carbon_intensity_g_kwh / 1000
+        self.state.total_carbon_emitted += (
+            energy_mwh * self.state.carbon_intensity_g_kwh / 1000
+        )
 
         # RECORD MEMORY: essential for learning
         experience = Experience(
             step=step,
             market_price=price_per_mwh,
-            bid_price=self.state.strategy_history[-1]["bid_price"] if self.state.strategy_history else price_per_mwh,
+            bid_price=(
+                self.state.strategy_history[-1]["bid_price"]
+                if self.state.strategy_history
+                else price_per_mwh
+            ),
             output_mw=abs(energy_mwh),
             revenue=revenue if energy_mwh > 0 else -abs(revenue),
             carbon_cost=carbon_cost,
             net_profit=net_profit if energy_mwh > 0 else -abs(revenue),
             frequency=50.0,
             weather=weather or {},
-            decision=self.state.strategy_history[-1] if self.state.strategy_history else {},
-            outcome="profitable" if (energy_mwh > 0 and net_profit > 0) or (energy_mwh < 0 and abs(revenue) < 500) else "loss",
+            decision=(
+                self.state.strategy_history[-1] if self.state.strategy_history else {}
+            ),
+            outcome=(
+                "profitable"
+                if (energy_mwh > 0 and net_profit > 0)
+                or (energy_mwh < 0 and abs(revenue) < 500)
+                else "loss"
+            ),
         )
         self.memory.record(experience)
 
-    def _build_prompt(self, market_price: float, demand: float,
-                      frequency: float, carbon_price: float,
-                      memory_context: str, strategy_advice: str,
-                      weather: Dict[str, Any] = None) -> str:
+    def _build_prompt(
+        self,
+        market_price: float,
+        demand: float,
+        frequency: float,
+        carbon_price: float,
+        memory_context: str,
+        strategy_advice: str,
+        weather: Dict[str, Any] = None,
+    ) -> str:
         weather_str = json.dumps(weather) if weather else "N/A"
-        
+
         # FIX: deque does not support slicing — convert to list first
         experiences_list = list(self.memory.experiences)
         recent_prices = [e.market_price for e in experiences_list[-10:]]
@@ -87,7 +113,7 @@ class BatteryAgent(BaseAgent):
                 price_trend = "rising"
             elif recent_prices[-1] < recent_prices[-2] * 0.95:
                 price_trend = "falling"
-        
+
         # FIX: No $ symbols before numbers — MockLLM parser fails on $
         return f"""You are an autonomous battery arbitrage agent with memory and learning.
 

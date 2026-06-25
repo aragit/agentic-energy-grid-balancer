@@ -1,6 +1,5 @@
 """Tests for simulation orchestrator and end-to-end flow."""
 
-import pytest
 from core.simulation import GridSimulation
 
 
