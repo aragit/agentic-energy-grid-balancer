@@ -96,9 +96,6 @@ a $999/MWh bid or ignore a frequency violation. The symbolic orchestrator preven
 both — exactly as AlphaGo's tree search prevents the policy network from suggesting
 an illegal move.
 
-**L1–L7 Implementation Status:** Perception (✅), Memory (✅), Reasoning (✅),
-Rules (✅), Planning (⚠️ implicit), Execution (❌ direct calls), Governance (✅),
-Meta (❌ not implemented).
 
 ---
 
@@ -202,8 +199,8 @@ This animated trace shows the four-layer architecture executing step-by-step. Th
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    TYPE 2: SYMBOLIC[NEURAL]                          │
-│                                                                      │
+│                    TYPE 2: SYMBOLIC[NEURAL]                         │
+│                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  L1 SYMBOLIC ENVIRONMENT  (grid_physics.py)                  │   │
 │  │  WeatherEngine → GridPhysics → ConsumerDemand                │   │
@@ -214,7 +211,7 @@ This animated trace shows the four-layer architecture executing step-by-step. Th
 │  │  L3 NEURAL SUBROUTINE  (llm_engine.py × agents/)             │   │
 │  │  BaseAgent.decide_bid() → LLM prompt → JSON strategy         │   │
 │  └──────────────────────┬───────────────────────────────────────┘   │
-│                         │ Bids with guardrail clamp                │
+│                         │ Bids with guardrail clamp                 │
 │                         ▼                                           │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  SYMBOLIC AUCTION ENGINE  (auction.py)                       │   │
@@ -224,7 +221,7 @@ This animated trace shows the four-layer architecture executing step-by-step. Th
 │                         ▼                                           │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  L6 GOVERNANCE  (regulatory.py + orchestrator.py)            │   │
-│  │  Frequency check → Carbon cap → Violation tally             │   │
+│  │  Frequency check → Carbon cap → Violation tally              │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -270,14 +267,14 @@ For each hour step:
 │ Weather  │───▶│  Agent   │───▶│  Market  │───▶│  Grid    │───▶│Governance│
 │ Engine   │    │  LLM     │    │  Auction │    │  Physics │    │  Check   │
 └──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
-     │               │               │               │               │
-     │ Solar(5 MW)   │ Bid: $32.50   │ Clearing     │ Frequency     │ 49-51 Hz? │
-     │ Wind(0.9 MW)  │ Bid: $34.00   │ Price: $38.86│ 50.000 Hz     │ Carbon cap?│
-     │ Coal(170 MW)  │ Bid: $52.75   │ Surplus calc │               │ ✅/❌      │
-     │ Nuclear(285MW) │ Bid: $35.00  │               │               │           │
-     │ Consumer      │ Bid: $50.00   │               │               │           │
-     │ Battery       │ Bid: $39.00   │               │               │           │
-     └───────────────┴───────────────┴───────────────┴───────────────┴───────────┘
+     │               │               │               │             │
+     │ Solar(5 MW)   │ Bid: $32.50   │ Clearing      │ Frequency   │ 49-51 Hz?  │
+     │ Wind(0.9 MW)  │ Bid: $34.00   │ Price: $38.86 │ 50.000 Hz   │ Carbon cap?│
+     │ Coal(170 MW)  │ Bid: $52.75   │ Surplus calc  │             │ ✅/❌      │
+     │ Nuclear(285MW)│ Bid: $35.00   │               │             │            │
+     │ Consumer      │ Bid: $50.00   │               │             │            │
+     │ Battery       │ Bid: $39.00   │               │             │            │
+     └───────────────┴───────────────┴───────────────┴─────────────┴───────── ──┘
 ```
 
 ---
