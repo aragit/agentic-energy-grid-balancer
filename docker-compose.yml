@@ -1,29 +1,15 @@
-version: '3.8'
-
 services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - LLM_BACKEND=mock
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=sqlite:///app/data/grid.db
     volumes:
       - ./data:/app/data
     restart: unless-stopped
-    depends_on:
-      - db
-
-  db:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_USER=griduser
-      - POSTGRES_PASSWORD=gridpass
-      - POSTGRES_DB=gridbalancer
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
 
   ollama:
     image: ollama/ollama:latest
@@ -33,5 +19,4 @@ services:
       - "11434:11434"
 
 volumes:
-  postgres_data:
   ollama_data:

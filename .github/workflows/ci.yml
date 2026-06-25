@@ -1,45 +1,22 @@
-name: CI
+FROM python:3.12-slim
 
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+WORKDIR /app
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-      - run: pytest --cov=core --cov=api --cov-report=xml
-      - uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage.xml
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: pip install flake8 black
-      - run: black --check .
-      - run: flake8 core/ api/ tests/ --max-line-length=120
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-  docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t agentic-energy-grid-balancer .
-      - run: |
-          docker run -d -p 8000:8000 --name test-api agentic-energy-grid-balancer
-          sleep 5
-          curl -f http://localhost:8000/health || exit 1
-          docker stop test-api
+COPY . .
+
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
+
+CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8001"]
