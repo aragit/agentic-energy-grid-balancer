@@ -31,8 +31,9 @@ git clone https://github.com/aragit/agentic-energy-grid-balancer.git
 cd agentic-energy-grid-balancer
 python -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 
-# Start API
-python -m uvicorn api.main:app --host 0.0.0.0 --port 8001
+# Start API in background
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8001 &
+sleep 3
 
 # Run a 24-step simulation
 curl -X POST http://localhost:8001/simulation/run \
@@ -40,13 +41,19 @@ curl -X POST http://localhost:8001/simulation/run \
   -d '{"steps": 24, "llm_backend": "mock"}'
 ```
 
-Or with Docker:
+Open [http://localhost:8001/docs](http://localhost:8001/docs) for the interactive
+API documentation (Swagger UI). If port 8001 is in use, kill the old process
+first: `fuser -k 8001/tcp`.
+
+**Docker:**
 
 ```bash
 docker compose up --build
 ```
 
-Open [http://localhost:8001/docs](http://localhost:8001/docs) for API documentation.
+The CI pipeline (GitHub Actions) builds Docker and runs health + simulation
+endpoint tests automatically on push. Local Docker builds may hit Docker Hub
+rate limits on shared IPs.
 
 ---
 
