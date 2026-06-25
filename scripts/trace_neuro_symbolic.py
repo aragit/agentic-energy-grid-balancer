@@ -11,14 +11,14 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.llm_engine import MockLLMEngine  # noqa: E402
+from core.llm_engine import ReasoningEngine  # noqa: E402
 from core.simulation import GridSimulation  # noqa: E402
 from core.grid_physics import WeatherEngine  # noqa: E402
 
 
 def trace():
     """Run a 3-step trace and print all architecture layers."""
-    llm = MockLLMEngine(seed=42)
+    llm = ReasoningEngine(seed=42)
     sim = GridSimulation(llm=llm, steps=3)
 
     # Patch WeatherEngine to capture states for trace display
@@ -229,7 +229,7 @@ def trace():
     print("  │L3     │  BatteryAgent._build_prompt()")
     print("  │NEURAL │       │")
     print("  │SUB-   │       ▼")
-    print("  │ROUTINE│  MockLLMEngine.chat_completion()")
+    print("  │ROUTINE│  ReasoningEngine.chat_completion()")
     print("  │       │       │")
     print("  │       │       ▼")
     print("  │       │  JSON strategy: {bid_price, action, reasoning}")

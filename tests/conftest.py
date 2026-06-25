@@ -1,7 +1,7 @@
 """Shared fixtures for all tests."""
 
 import pytest
-from core.llm_engine import MockLLMEngine
+from core.llm_engine import ReasoningEngine
 from core.grid_physics import WeatherEngine, GridPhysics
 from core.auction import DoubleSidedAuction
 from core.agents.solar import SolarAgent
@@ -18,7 +18,7 @@ from core.memory import Experience
 
 @pytest.fixture
 def llm():
-    return MockLLMEngine(seed=42)
+    return ReasoningEngine(seed=42)
 
 
 @pytest.fixture

@@ -12,6 +12,7 @@ class HealthResponse(BaseModel):
 class SimulationRequest(BaseModel):
     steps: int = 24
     llm_backend: Optional[str] = "mock"
+    ollama_model: Optional[str] = "tinyllama"
 
 
 class SimulationResponse(BaseModel):

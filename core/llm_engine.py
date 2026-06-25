@@ -35,13 +35,13 @@ class BaseLLMEngine(ABC):
         pass
 
 
-class MockLLMEngine(BaseLLMEngine):
+class ReasoningEngine(BaseLLMEngine):
     def __init__(self, seed: int = 42):
         import random
 
         self.rng = random.Random(seed)
-        self.model_name = "mock-llm-energy"
-        logger.info("[LLM] Using MockLLM")
+        self.model_name = "rule-based-reasoner"
+        logger.info("[LLM] Using ReasoningEngine")
 
     def chat_completion(self, messages, temperature=0.7, max_tokens=512):
         start = time.time()
@@ -188,5 +188,5 @@ class LLMEngineFactory:
                 return OllamaEngine(model=ollama_model)
             except Exception as e:
                 logger.warning(f"[LLM] Ollama failed ({e}), falling back to mock")
-                return MockLLMEngine()
-        return MockLLMEngine()
+                return ReasoningEngine()
+        return ReasoningEngine()

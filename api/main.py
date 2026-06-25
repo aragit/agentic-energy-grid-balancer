@@ -53,8 +53,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    backend = os.getenv("LLM_BACKEND", "mock")
-    return HealthResponse(status="ok", llm_mode=backend)
+    global current_llm
+    mode = "mock"
+    if current_llm and "ollama" in type(current_llm).__name__.lower():
+        mode = "ollama"
+    return HealthResponse(status="ok", llm_mode=mode)
 
 
 @app.post("/simulation/run", response_model=SimulationResponse)
@@ -62,7 +65,9 @@ async def run_simulation(request: SimulationRequest):
     global current_simulation, current_llm
 
     if request.llm_backend:
-        current_llm = LLMEngineFactory.create(backend=request.llm_backend)
+        current_llm = LLMEngineFactory.create(
+            backend=request.llm_backend, ollama_model=request.ollama_model
+        )
 
     current_simulation = GridSimulation(llm=current_llm, steps=request.steps)
     result = current_simulation.run()
@@ -126,6 +131,13 @@ async def market_history():
         transactions=current_simulation.auction.transaction_history,
         price_trend=current_simulation.auction.get_price_trend(),
     )
+
+
+@app.get("/market/prices")
+async def market_prices():
+    if not current_simulation:
+        raise HTTPException(status_code=404, detail="No simulation running")
+    return {"prices": current_simulation.auction.price_history}
 
 
 @app.get("/carbon/report", response_model=CarbonReportResponse)

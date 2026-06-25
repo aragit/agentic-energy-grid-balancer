@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grid Control — Agentic Energy Grid Balancer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e1a;
+  --surface:#141b2d;
+  --border:#1e2a45;
+  --primary:#00e5a0;
+  --warn:#ffab00;
+  --danger:#ff3355;
+  --neutral:#4a6fa5;
+  --text:#e8edf5;
+  --muted:#7a8ba8;
+  --radius:8px;
+  --font:system-ui,-apple-system,'Inter',sans-serif;
+  --mono:'SF Mono','JetBrains Mono','Fira Code',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.5;min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:20px}
+
+/* Header */
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:24px 0;border-bottom:1px solid var(--border);margin-bottom:24px}
+h1{font-size:24px;font-weight:600;letter-spacing:-0.3px}
+h1 span{color:var(--primary)}
+.badge-group{display:flex;gap:8px;flex-wrap:wrap}
+.badge{font-family:var(--mono);font-size:12px;padding:4px 10px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.badge .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot.green{background:var(--primary);box-shadow:0 0 6px var(--primary)}
+.dot.amber{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.dot.red{background:var(--danger);box-shadow:0 0 6px var(--danger)}
+.dot.gray{background:var(--muted)}
+
+/* Card grid */
+.row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:1200px){.row{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){.row{grid-template-columns:1fr}}
+.row-2{grid-template-columns:1fr 1fr}
+@media(max-width:768px){.row-2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative}
+.card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title .icon{font-size:14px}
+.pulse-dot{width:7px;height:7px;border-radius:50%;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%{opacity:1}50%{opacity:0.3}100%{opacity:1}}
+
+/* Big number gauge */
+.gauge{text-align:center;padding:8px 0}
+.gauge-val{font-family:var(--mono);font-size:52px;font-weight:300;line-height:1;transition:color 0.4s}
+.gauge-val .unit{font-size:16px;color:var(--muted)}
+.gauge-label{font-size:13px;color:var(--muted);margin-top:4px}
+.gauge-status{font-size:12px;margin-top:8px;font-family:var(--mono)}
+.gauge-bar{height:4px;background:var(--border);border-radius:2px;margin-top:14px;overflow:hidden}
+.gauge-bar-inner{height:100%;border-radius:2px;transition:width 0.6s ease,background 0.4s ease;width:50%}
+.freq-green{color:var(--primary)}
+.freq-amber{color:var(--warn)}
+.freq-red{color:var(--danger)}
+
+/* Run form */
+.form-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:0.8px}
+.form-group input,.form-group select{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--mono);font-size:13px;outline:none;transition:border 0.2s}
+.form-group input:focus,.form-group select:focus{border-color:var(--primary)}
+.btn{background:var(--primary);color:#0a0e1a;border:none;padding:8px 20px;border-radius:var(--radius);font-weight:600;font-size:13px;cursor:pointer;transition:opacity 0.2s;font-family:var(--font);display:inline-flex;align-items:center;gap:6px}
+.btn:hover{opacity:0.85}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+
+/* Chart containers */
+.chart-wrap{position:relative;height:200px}
+.chart-wrap.tall{height:250px}
+.chart-wrap canvas{width:100%!important;height:100%!important}
+
+/* Loading overlay */
+.loading-overlay{display:none;position:absolute;inset:0;background:rgba(10,14,26,0.7);border-radius:var(--radius);align-items:center;justify-content:center;z-index:5}
+.loading-overlay.show{display:flex}
+.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Empty state */
+.empty{display:none;text-align:center;padding:28px 16px;color:var(--muted)}
+.empty h3{font-size:14px;font-weight:500;margin-bottom:4px;color:var(--text)}
+.empty p{font-size:12px}
+.empty.active{display:block}
+
+/* Error banner */
+.error-banner{display:none;background:rgba(255,51,85,0.12);border:1px solid var(--danger);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--danger);align-items:center;gap:8px}
+.error-banner.show{display:flex}
+
+/* Event log */
+.log{max-height:260px;overflow-y:auto;font-family:var(--mono);font-size:12px;line-height:1.6}
+.log::-webkit-scrollbar{width:4px}
+.log::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.log-entry{padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;gap:8px}
+.log-time{color:var(--muted);flex-shrink:0}
+.log-msg{flex:1}
+.log-msg .ok{color:var(--primary)}
+.log-msg .warn{color:var(--warn)}
+.log-msg .err{color:var(--danger)}
+
+/* Agent cards */
+.agent-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+@media(max-width:768px){.agent-grid{grid-template-columns:1fr}}
+.agent-card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.agent-info{flex:1;min-width:0}
+.agent-name{font-size:13px;font-weight:600}
+.agent-type{font-size:11px;color:var(--muted)}
+.agent-stats{display:flex;gap:10px;font-family:var(--mono);font-size:11px;flex-shrink:0}
+.agent-stat{text-align:right}
+.agent-stat .val{color:var(--text)}
+.agent-stat .lbl{font-size:10px;color:var(--muted);text-transform:uppercase}
+
+/* Section toggle */
+.section{display:none}
+.section.active{display:block}
+
+/* Color utility */
+.c-primary{color:var(--primary)}
+.c-warn{color:var(--warn)}
+.c-danger{color:var(--danger)}
+.c-muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>⚡ Grid <span>Control</span></h1>
+  <div class="badge-group">
+    <span class="badge"><span class="dot green" id="healthDot"></span> <span id="healthLabel">checking…</span></span>
+    <span class="badge" id="badgeFreq">⚡ <span id="freqVal">—</span> Hz</span>
+    <span class="badge" id="badgePrice">💰 $<span id="priceVal">—</span></span>
+    <span class="badge" id="badgeStep">📋 step <span id="stepVal">—</span></span>
+  </div>
+</header>
+
+<div class="error-banner" id="errorBanner">
+  <span>⚠️</span>
+  <span id="errorText"></span>
+</div>
+
+<!-- Run Simulation -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title"><span class="icon">▶</span> Run Simulation</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Steps</label>
+      <input type="number" id="stepsInput" value="24" min="1" max="168" style="width:80px">
+    </div>
+    <div class="form-group">
+      <label>LLM</label>
+      <select id="llmSelect" onchange="toggleOllamaModel()">
+        <option value="mock">ReasoningEngine</option>
+        <option value="ollama">Ollama</option>
+      </select>
+      <select id="ollamaModelSelect" style="display:none;margin-left:6px;width:140px">
+        <option value="tinyllama">tinyllama (fast)</option>
+        <option value="qwen2.5:1.5b">qwen2.5:1.5b</option>
+      </select>
+      <span id="ollamaHint" style="display:none;font-size:11px;color:var(--warn);margin-left:8px">⏳ ~10s per call — keep steps ≤ 12</span>
+    </div>
+    <button class="btn" id="runBtn" onclick="runSimulation()">▶ Run</button>
+  </div>
+</div>
+
+<!-- Agents summary -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title"><span class="icon">🏭</span> Grid Agents</div>
+  <div class="agent-grid" id="agentGrid"></div>
+</div>
+
+<!-- Section: results (hidden until first run) -->
+<div id="resultsSection" class="section">
+
+  <div class="row">
+    <!-- Frequency gauge -->
+    <div class="card">
+      <div class="card-title"><span class="pulse-dot" style="background:var(--primary)" id="freqPulse"></span> Frequency</div>
+      <div class="loading-overlay" id="loadingStatus"><div class="spinner"></div></div>
+      <div class="gauge">
+        <div class="gauge-val" id="freqDisplay">— <span class="unit">Hz</span></div>
+        <div class="gauge-label" id="freqLabel">No data</div>
+        <div class="gauge-bar"><div class="gauge-bar-inner" id="freqBar" style="width:50%"></div></div>
+        <div class="gauge-status" id="freqDetail"></div>
+      </div>
+    </div>
+
+    <!-- Agent Performance -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📊</span> Agent Performance</div>
+      <div class="loading-overlay" id="loadingAgents"><div class="spinner"></div></div>
+      <div class="chart-wrap tall"><canvas id="agentChart"></canvas></div>
+      <div class="empty active" id="emptyAgents">
+        <h3>No data</h3>
+        <p>Run a simulation to see agent balances</p>
+      </div>
+    </div>
+
+    <!-- Clearing Price -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📈</span> Clearing Price</div>
+      <div class="loading-overlay" id="loadingMarket"><div class="spinner"></div></div>
+      <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+      <div class="empty active" id="emptyMarket">
+        <h3>No data</h3>
+        <p>Run a simulation to see price trends</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="row row-2">
+    <!-- Carbon Report -->
+    <div class="card">
+      <div class="card-title"><span class="icon">🌲</span> Carbon Report</div>
+      <div class="loading-overlay" id="loadingCarbon"><div class="spinner"></div></div>
+      <div class="chart-wrap"><canvas id="carbonChart"></canvas></div>
+      <div class="empty active" id="emptyCarbon">
+        <h3>No data</h3>
+        <p>Run a simulation to see emissions</p>
+      </div>
+    </div>
+
+    <!-- Generation Mix -->
+    <div class="card">
+      <div class="card-title"><span class="icon">⚡</span> Generation Mix</div>
+      <div class="loading-overlay" id="loadingMix"><div class="spinner"></div></div>
+      <div class="chart-wrap"><canvas id="mixChart"></canvas></div>
+      <div class="empty active" id="emptyMix">
+        <h3>No data</h3>
+        <p>Run a simulation to see generation mix</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event Log -->
+  <div class="row">
+    <div style="grid-column:1/-1">
+      <div class="card">
+        <div class="card-title"><span class="icon">📋</span> Event Log</div>
+        <div class="log" id="eventLog"><div class="log-entry" style="color:var(--muted)">Events will appear here when you run a simulation.</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────
+let agentChartInst = null;
+let priceChartInst = null;
+let carbonChartInst = null;
+let mixChartInst = null;
+
+function $(id){return document.getElementById(id)}
+
+function showLoading(id){const el=$(id);if(el)el.classList.add('show')}
+function hideLoading(id){const el=$(id);if(el)el.classList.remove('show')}
+function showEmpty(id){const el=$(id);if(el)el.classList.add('active')}
+function hideEmpty(id){const el=$(id);if(el)el.classList.remove('active')}
+
+function showError(msg){
+  const b=$('errorBanner');$('errorText').textContent=msg;b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'),8000);
+}
+
+function fmtTime(){return new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+
+function logEvent(msg,cls=''){
+  const el=$('eventLog');
+  const first=el.querySelector('.log-entry:first-child');
+  if(first&&first.textContent.includes('Events will appear')) first.remove();
+  const div=document.createElement('div');div.className='log-entry';
+  div.innerHTML=`<span class="log-time">${fmtTime()}</span><span class="log-msg ${cls}">${msg}</span>`;
+  el.appendChild(div);
+  el.scrollTop=el.scrollHeight;
+}
+
+function freqClass(hz){
+  if(hz==null) return '';
+  if(hz>=49.5&&hz<=50.5) return 'freq-green';
+  if(hz>=49&&hz<=51) return 'freq-amber';
+  return 'freq-red';
+}
+
+function freqBarColor(hz){
+  if(hz==null) return 'var(--neutral)';
+  if(hz>=49.5&&hz<=50.5) return 'var(--primary)';
+  if(hz>=49&&hz<=51) return 'var(--warn)';
+  return 'var(--danger)';
+}
+
+function freqLabel(hz){
+  if(hz==null) return '—';
+  if(hz>=49.5&&hz<=50.5) return '✅ Stable';
+  if(hz>=49&&hz<=51) return '⚠️ Marginal';
+  return '❌ Critical';
+}
+
+// ── API ────────────────────────────────────────────────
+async function apiGet(path){
+  const ctl=new AbortController();setTimeout(()=>ctl.abort(),8000);
+  const r=await fetch(path,{signal:ctl.signal});
+  if(r.status===404) return null;
+  if(!r.ok){const t=await r.text();throw new Error(r.status+' '+t)}
+  return r.json();
+}
+
+async function apiPost(path,body){
+  const ctl=new AbortController();setTimeout(()=>ctl.abort(),600000);
+  const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctl.signal});
+  if(!r.ok){const t=await r.text();throw new Error(r.status+' '+t)}
+  return r.json();
+}
+
+// ── Health ──────────────────────────────────────────────
+function toggleOllamaModel(){
+  const on=$('llmSelect').value==='ollama';
+  $('ollamaModelSelect').style.display=on?'inline':'none';
+  $('ollamaHint').style.display=on?'block':'none';
+  if(on&&parseInt($('stepsInput').value)>12) $('stepsInput').value=12;
+}
+
+async function updateHealth(){
+  try{
+    const h=await apiGet('/health');
+    if(!h)return;
+    $('healthLabel').textContent=h.llm_mode==='ollama'?'ollama':'reasoning';
+    $('healthDot').className='dot green';
+  }catch(e){
+    $('healthLabel').textContent='offline';
+    $('healthDot').className='dot red';
+  }
+}
+
+// ── Agent grid ──────────────────────────────────────────
+function renderAgentGrid(agents){
+  const g=$('agentGrid');g.innerHTML='';
+  const colors={solar:'#00e5a0',wind:'#4a6fa5',coal:'#ff3355',nuclear:'#a855f7',battery:'#ffab00',consumer:'#7a8ba8'};
+  const icons={solar:'☀️',wind:'🌬️',coal:'🔥',nuclear:'☢️',battery:'🔋',consumer:'🏙️'};
+  const defaultAgents=[
+    {name:'SolarFarm-A',type:'solar',msg:'Zero marginal cost'},
+    {name:'WindFarm-B',type:'wind',msg:'Weather dependent'},
+    {name:'CoalPlant-C',type:'coal',msg:'Carbon intensive'},
+    {name:'NuclearPlant-D',type:'nuclear',msg:'Must-run baseload'},
+    {name:'GridBattery-E',type:'battery',msg:'Arbitrage 10 MWh'},
+    {name:'MetroCity',type:'consumer',msg:'Price-elastic demand'}
+  ];
+  const list=agents||defaultAgents;
+  list.forEach(a=>{
+    const c=document.createElement('div');c.className='agent-card';
+    const color=colors[a.agent_type||a.type]||'var(--neutral)';
+    const icon=icons[a.agent_type||a.type]||'⚡';
+    c.innerHTML=`
+      <div class="agent-info">
+        <div class="agent-name" style="color:${color}">${icon} ${a.agent_name||a.name}</div>
+        <div class="agent-type">${a.agent_type||a.type}</div>
+      </div>
+      <div class="agent-stats">
+        <div class="agent-stat"><div class="val">${a.balance!==undefined?'$'+Number(a.balance).toFixed(0):'—'}</div><div class="lbl">Balance</div></div>
+        <div class="agent-stat"><div class="val">${a.total_revenue!==undefined?'$'+Number(a.total_revenue).toFixed(0):'—'}</div><div class="lbl">Revenue</div></div>
+        <div class="agent-stat"><div class="val">${a.total_carbon_emitted!==undefined?Number(a.total_carbon_emitted).toFixed(0)+'kg':'—'}</div><div class="lbl">CO₂</div></div>
+      </div>`;
+    g.appendChild(c);
+  });
+}
+
+// ── Charts ──────────────────────────────────────────────
+function renderAgentChart(data){
+  if(!data||data.length===0){showEmpty('emptyAgents');return}
+  hideEmpty('emptyAgents');
+  const ctx=document.getElementById('agentChart').getContext('2d');
+  if(agentChartInst) agentChartInst.destroy();
+  agentChartInst=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:data.map(a=>a.agent_name),
+      datasets:[
+        {label:'Balance $',data:data.map(a=>a.balance),backgroundColor:'rgba(0,229,160,0.7)',borderColor:'#00e5a0',borderWidth:1},
+        {label:'Revenue $',data:data.map(a=>a.total_revenue),backgroundColor:'rgba(74,111,165,0.7)',borderColor:'#4a6fa5',borderWidth:1},
+        {label:'Carbon kg',data:data.map(a=>a.total_carbon_emitted),backgroundColor:'rgba(255,51,85,0.5)',borderColor:'#ff3355',borderWidth:1}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{color:'#7a8ba8',boxWidth:12,font:{size:10}}}},
+      scales:{
+        x:{ticks:{color:'#7a8ba8',font:{size:9}},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#7a8ba8',font:{size:9}},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+}
+
+function renderPriceChart(prices){
+  if(!prices||prices.length===0){showEmpty('emptyMarket');return}
+  hideEmpty('emptyMarket');
+  const ctx=document.getElementById('priceChart').getContext('2d');
+  if(priceChartInst) priceChartInst.destroy();
+  priceChartInst=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:prices.map((_,i)=>'S'+i),
+      datasets:[{
+        label:'Clearing Price $/MWh',
+        data:prices,
+        borderColor:'#00e5a0',
+        backgroundColor:(ctx)=>{
+          const g=ctx.chart.ctx.createLinearGradient(0,0,0,180);
+          g.addColorStop(0,'rgba(0,229,160,0.2)');g.addColorStop(1,'rgba(0,229,160,0)');
+          return g;
+        },
+        fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:'#141b2d',pointBorderColor:'#00e5a0',pointBorderWidth:1.5
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#7a8ba8',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#7a8ba8',font:{size:9},callback:v=>'$'+v},grid:{color:'rgba(255,255,255,0.04)'}}
+      },
+      interaction:{mode:'index',intersect:false}
+    }
+  });
+}
+
+function renderCarbonChart(report){
+  if(!report||!report.agent_breakdown||report.agent_breakdown.length===0){showEmpty('emptyCarbon');return}
+  hideEmpty('emptyCarbon');
+  const ctx=document.getElementById('carbonChart').getContext('2d');
+  if(carbonChartInst) carbonChartInst.destroy();
+  const pal=['#00e5a0','#4a6fa5','#ffab00','#ff3355','#a855f7','#7a8ba8'];
+  carbonChartInst=new Chart(ctx,{
+    type:'doughnut',
+    data:{
+      labels:report.agent_breakdown.map(a=>a.agent_name),
+      datasets:[{
+        data:report.agent_breakdown.map(a=>a.carbon_kg),
+        backgroundColor:pal.slice(0,report.agent_breakdown.length),
+        borderColor:'#141b2d',borderWidth:2
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{
+        legend:{position:'right',labels:{color:'#7a8ba8',boxWidth:10,font:{size:10},padding:8}},
+        tooltip:{callbacks:{label:c=>`${c.label}: ${c.raw.toFixed(1)} kg CO₂`}}
+      }
+    }
+  });
+}
+
+function renderMixChart(agents){
+  if(!agents||agents.length===0){showEmpty('emptyMix');return}
+  hideEmpty('emptyMix');
+  const ctx=document.getElementById('mixChart').getContext('2d');
+  if(mixChartInst) mixChartInst.destroy();
+  const pal=['#00e5a0','#4a6fa5','#ff3355','#a855f7','#ffab00','#7a8ba8'];
+  const totalRev=agents.reduce((s,a)=>s+Math.abs(a.total_revenue||0),0)||1;
+  mixChartInst=new Chart(ctx,{
+    type:'polarArea',
+    data:{
+      labels:agents.map(a=>a.agent_name),
+      datasets:[{
+        data:agents.map(a=>Math.abs((a.total_revenue||0)/totalRev*100).toFixed(1)),
+        backgroundColor:pal.slice(0,agents.length).map(c=>c+'cc'),
+        borderColor:pal.slice(0,agents.length),borderWidth:2
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{r:{ticks:{color:'#7a8ba8',backdropColor:'transparent',font:{size:9}},grid:{color:'rgba(255,255,255,0.06)'}}},
+      plugins:{
+        legend:{position:'right',labels:{color:'#7a8ba8',boxWidth:10,font:{size:10},padding:8}},
+        tooltip:{callbacks:{label:c=>`${c.label}: ${c.raw}%`}}
+      }
+    }
+  });
+}
+
+// ── Refresh ─────────────────────────────────────────────
+async function refreshAll(){
+  // Status
+  showLoading('loadingStatus');
+  try{
+    const s=await apiGet('/simulation/status');
+    if(s){
+      const hz=s.current_frequency;
+      renderFreq(hz,s.steps_completed?s.steps_completed+' steps':'');
+      $('freqVal').textContent=hz.toFixed(3);
+      $('priceVal').textContent=(s.current_price||0).toFixed(2);
+      $('stepVal').textContent=s.steps_completed||0;
+    }
+  }catch(e){/* no sim */}
+  finally{hideLoading('loadingStatus')}
+
+  // Agents
+  showLoading('loadingAgents');
+  try{
+    const a=await apiGet('/agents/performance');
+    if(a){renderAgentChart(a);renderAgentGrid(a);}
+    else showEmpty('emptyAgents');
+  }catch(e){showEmpty('emptyAgents')}
+  finally{hideLoading('loadingAgents')}
+
+  // Market — prices from dedicated endpoint
+  showLoading('loadingMarket');
+  try{
+    const m=await apiGet('/market/prices');
+    if(m&&m.prices) renderPriceChart(m.prices);
+    else showEmpty('emptyMarket');
+  }catch(e){showEmpty('emptyMarket')}
+  finally{hideLoading('loadingMarket')}
+
+  // Carbon
+  showLoading('loadingCarbon');
+  try{
+    const c=await apiGet('/carbon/report');
+    if(c){renderCarbonChart(c);}
+    else showEmpty('emptyCarbon');
+  }catch(e){showEmpty('emptyCarbon')}
+  finally{hideLoading('loadingCarbon')}
+
+  // Market share (revenue-based) instead of generation mix
+  showLoading('loadingMix');
+  try{
+    const a2=await apiGet('/agents/performance');
+    if(a2){renderMixChart(a2);}
+    else showEmpty('emptyMix');
+  }catch(e){showEmpty('emptyMix')}
+  finally{hideLoading('loadingMix')}
+}
+
+function renderFreq(hz,label){
+  const d=$('freqDisplay');d.textContent=hz!=null?hz.toFixed(3):'—';
+  d.className='gauge-val '+freqClass(hz);
+  $('freqLabel').textContent=label||'—';
+  $('freqDetail').textContent=freqLabel(hz);
+  $('freqDetail').className='gauge-status '+freqClass(hz);
+  const bar=$('freqBar');
+  if(hz!=null){const pct=Math.max(0,Math.min(100,((hz-48)/4)*100));bar.style.width=pct+'%';bar.style.background=freqBarColor(hz);}
+  // Pulse dot
+  const pd=$('freqPulse');
+  if(hz!=null){pd.style.background=freqBarColor(hz);pd.style.display=''}else{pd.style.display='none'}
+}
+
+// ── Run ─────────────────────────────────────────────────
+async function runSimulation(){
+  const btn=$('runBtn');btn.disabled=true;btn.innerHTML='⏳ Running…';
+  const steps=parseInt($('stepsInput').value)||24;
+  const llm=$('llmSelect').value;
+  const ollama_model=$('ollamaModelSelect').value;
+  try{
+    const result=await apiPost('/simulation/run',{steps,llm_backend:llm,ollama_model});
+    $('resultsSection').classList.add('active');
+    await updateHealth();
+    logEvent(`Simulation complete — ${result.total_steps} steps · final freq ${result.final_frequency.toFixed(3)} Hz · ${result.violations.length} violations`,'ok');
+    await refreshAll();
+    const lastPrice=result.price_history?.[result.price_history.length-1];
+    if(lastPrice) logEvent(`Final clearing price $${lastPrice.toFixed(2)}/MWh`,'');
+    if(result.violations&&result.violations.length>0){
+      result.violations.forEach(v=>logEvent(`⚠️ ${v.type} violation at step ${v.step}: ${v.value}`,'warn'));
+    }
+  }catch(e){
+    const msg=e.name==='AbortError'?'Timed out after 10 min — Ollama too slow. Use fewer steps (3-6) or ReasoningEngine.':e.message.includes('500')?'Ollama error — model too slow or crashed. Try tinyllama (fastest) or use ReasoningEngine.':e.message;
+    showError(msg);
+    logEvent(`✖ Failed: ${msg}`,'err');
+  }finally{
+    btn.disabled=false;btn.innerHTML='▶ Run';
+  }
+}
+
+// ── Init ────────────────────────────────────────────────
+async function init(){
+  toggleOllamaModel();
+  await updateHealth();
+  // Try loading existing data (if a sim was already run)
+  try{
+    const s=await apiGet('/simulation/status');
+    if(s&&s.steps_completed>0){
+      $('resultsSection').classList.add('active');
+      await refreshAll();
+    }else{
+      renderAgentGrid(null);
+    }
+  }catch(e){
+    renderAgentGrid(null);
+  }
+}
+init();
+</script>
+</body>
+</html>
