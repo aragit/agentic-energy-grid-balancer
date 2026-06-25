@@ -11,21 +11,6 @@
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT">
 </p>
 
-| Language | Python 3.12 | Runtime |
-|:---------|:------------|:--------|
-| **Web Framework** | FastAPI 0.111 + Uvicorn 0.30 | REST API server |
-| **Data Validation** | Pydantic v2.7 | Request/response models + BidStrategy neural boundary |
-| **ORM** | SQLAlchemy 2.0 | Database models (defined, not written at runtime) |
-| **HTTP Client** | httpx 0.27 | Ollama API calls |
-| **Math** | NumPy 1.26 | Grid physics, statistics |
-| **Scripting** | Python scripts | trace_neuro_symbolic.py architecture trace |
-| **Container** | Docker + docker compose | Deployment |
-| **CI/CD** | GitHub Actions | 3-job matrix (test, lint, docker) |
-| **Testing** | pytest 8.2 + pytest-cov 4.1 | Unit tests + coverage |
-| **Linting** | black 24.4 + flake8 7.0 | Code formatting |
-| **LLM (external)** | Ollama (tinyllama, qwen2.5) | Local neural inference |
-| **Listed, unused** | SciPy 1.13, Jinja2 3.1 | Present in requirements.txt, not imported in code |
-
 ---
 
 Six energy agents (solar, wind, coal, nuclear, battery, consumer) trade in a
